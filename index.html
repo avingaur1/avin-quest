@@ -1,0 +1,1267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Avin Quest: a playable pixel-art RPG version of Avin Gaur's CV.">
+<title>Avin Quest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+/* Layout: full-screen canvas world, HTML overlays for text (dialogue, panels, mini-games). Single deliberate dusk palette. */
+:root{
+  --night:#100f1d;      /* page ground */
+  --ink:#1a1830;        /* panel fill */
+  --ink2:#26234a;       /* raised panel */
+  --line:#3d3870;       /* panel rules */
+  --paper:#f5ead2;      /* text */
+  --muted:#b8afd6;      /* secondary text */
+  --gold:#f4b740;       /* accent: achievements, primary actions */
+  --teal:#4cc7ad;       /* success */
+  --rose:#ef7470;       /* error / hint */
+  --sky:#7fb6ff;        /* fiction label */
+  --display:'Press Start 2P', ui-monospace, 'Courier New', monospace;
+  --body:'VT323', ui-monospace, 'Courier New', monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--night);color:var(--paper);overflow:hidden;overscroll-behavior:none}
+body{font-family:var(--body);font-size:20px;-webkit-user-select:none;user-select:none;touch-action:none}
+#app{position:fixed;inset:0;overflow:hidden;background:var(--night)}
+#cv{position:absolute;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges}
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .18s}
+.px-panel{background:var(--ink);border:3px solid var(--paper);box-shadow:0 0 0 3px #07060f,6px 6px 0 3px rgba(0,0,0,.45);border-radius:2px}
+button{font-family:var(--display);font-size:10px;line-height:1.4;color:var(--night);background:var(--gold);border:0;padding:10px 12px;cursor:pointer;box-shadow:inset -3px -3px 0 rgba(0,0,0,.25),0 0 0 2px #07060f;border-radius:1px}
+button:hover{filter:brightness(1.08)}
+button:active{transform:translateY(1px)}
+button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
+button.ghost{background:var(--ink2);color:var(--paper)}
+button.small{font-size:9px;padding:7px 9px}
+button:disabled{opacity:.45;cursor:not-allowed}
+
+/* HUD */
+#hud{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:max(10px,env(safe-area-inset-left,0px));right:max(10px,env(safe-area-inset-right,0px));display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none}
+#hud > *{pointer-events:auto}
+#loc{padding:8px 10px;min-width:0}
+#loc .t{font-family:var(--display);font-size:9px;color:var(--gold);letter-spacing:.06em}
+#loc .n{font-size:22px;line-height:1;margin-top:4px}
+#btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#btns button{font-size:8px;padding:8px 8px;background:var(--ink2);color:var(--paper)}
+#btns button .k{color:var(--gold)}
+#tracker{position:absolute;left:max(10px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 72px);max-width:min(300px,calc(100% - 20px));padding:8px 10px;font-size:19px;line-height:1.1;pointer-events:none}
+#tracker .h{font-family:var(--display);font-size:8px;color:var(--muted);margin-bottom:5px}
+#tracker .o{display:flex;gap:6px}
+#tracker .o span:first-child{flex:none}
+#tracker .o.d{color:var(--teal)}
+#tracker .q{color:var(--gold);margin-bottom:3px}
+#help{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 8px);font-family:var(--display);font-size:8px;color:var(--muted);background:rgba(16,15,29,.7);padding:6px 10px;white-space:nowrap;pointer-events:none}
+
+/* prompt bubble */
+#prompt{position:absolute;transform:translate(-50%,-100%);font-family:var(--display);font-size:8px;background:var(--paper);color:var(--night);padding:5px 7px;white-space:nowrap;pointer-events:none;box-shadow:0 0 0 2px #07060f;display:flex;gap:6px;align-items:center}
+#prompt .key{background:var(--night);color:var(--gold);padding:2px 4px}
+#prompt::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-4px;border:4px solid transparent;border-top-color:var(--paper)}
+
+/* dialogue */
+#dlg{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);width:min(760px,calc(100% - 24px));display:flex;gap:12px;padding:12px;align-items:flex-start}
+#dlg canvas{width:72px;height:72px;image-rendering:pixelated;background:var(--ink2);flex:none;box-shadow:0 0 0 2px var(--line)}
+#dlg .body{flex:1;min-width:0}
+#dlg .nm{font-family:var(--display);font-size:10px;color:var(--gold);margin-bottom:6px}
+#dlg .tx{font-size:23px;line-height:1.15;min-height:54px}
+#dlg .row{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.tag{display:inline-block;font-family:var(--display);font-size:7px;padding:3px 5px;vertical-align:middle;letter-spacing:.04em}
+.tag.fic{background:var(--sky);color:var(--night)}
+.tag.real{background:var(--teal);color:var(--night)}
+.tag.fun{background:#c49bff;color:var(--night)}
+
+/* modal */
+#modal{position:absolute;inset:0;background:rgba(8,7,16,.72);display:flex;align-items:center;justify-content:center;padding:calc(env(safe-area-inset-top,0px) + 12px) max(12px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 12px) max(12px,env(safe-area-inset-left,0px))}
+#mbox{width:min(780px,100%);max-height:100%;overflow:auto;padding:18px 18px 16px;-webkit-user-select:text;user-select:text;touch-action:pan-y}
+#mbox h2{font-family:var(--display);font-size:13px;line-height:1.5;color:var(--gold);margin:0 0 4px;text-wrap:balance}
+#mbox h3{font-family:var(--display);font-size:10px;color:var(--paper);margin:16px 0 8px;line-height:1.5}
+#mbox p{margin:6px 0;font-size:21px;line-height:1.15;max-width:65ch}
+#mbox .sub{color:var(--muted)}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:14px}
+.grid{display:grid;gap:10px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--ink2);padding:10px 12px;box-shadow:0 0 0 2px var(--line);min-width:0}
+.card .ct{font-family:var(--display);font-size:9px;color:var(--gold);margin-bottom:6px;line-height:1.5}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;font-size:19px;line-height:1.1}
+.card dt{color:var(--muted)}
+.card dd{margin:0}
+.card.sel{box-shadow:0 0 0 3px var(--gold)}
+.card.ok{box-shadow:0 0 0 3px var(--teal)}
+.card.bad{box-shadow:0 0 0 3px var(--rose)}
+.fb{margin-top:10px;padding:10px 12px;font-size:20px;line-height:1.15;background:var(--ink2);border-left:4px solid var(--muted)}
+.fb.ok{border-color:var(--teal)}
+.fb.bad{border-color:var(--rose)}
+.opt{display:block;width:100%;text-align:left;font-family:var(--body);font-size:21px;line-height:1.1;background:var(--ink2);color:var(--paper);padding:9px 12px;margin:6px 0;box-shadow:0 0 0 2px var(--line)}
+.opt.ok{box-shadow:0 0 0 3px var(--teal)}
+.opt.bad{box-shadow:0 0 0 3px var(--rose)}
+.opt.on{box-shadow:0 0 0 3px var(--gold)}
+ul.cv{margin:8px 0 0;padding-left:20px;font-size:21px;line-height:1.15}
+ul.cv li{margin:5px 0}
+ul.cv li::marker{color:var(--gold)}
+.reveal-head{display:flex;gap:14px;align-items:center}
+.reveal-head canvas{width:64px;height:64px;image-rendering:pixelated;flex:none}
+.role{font-size:22px}
+.dates{color:var(--muted);font-size:19px}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.badge{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;font-size:18px;line-height:1}
+.badge canvas{width:48px;height:48px;image-rendering:pixelated}
+.badge.locked canvas{filter:grayscale(1) brightness(.45)}
+.badge.locked span{color:#6e6890}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--display);font-size:8px;padding:6px 8px;background:var(--ink2);box-shadow:0 0 0 2px var(--line)}
+.chip.on{background:var(--teal);color:var(--night);box-shadow:none}
+
+/* toasts */
+#toasts{position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 64px);display:flex;flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none}
+.toast{display:flex;gap:10px;align-items:center;padding:8px 12px 8px 8px;animation:tin .35s steps(5) both}
+.toast canvas{width:40px;height:40px;image-rendering:pixelated}
+.toast .a{font-family:var(--display);font-size:7px;color:var(--gold)}
+.toast .b{font-size:21px;line-height:1}
+.toast.out{animation:tout .3s steps(4) both}
+@keyframes tin{from{transform:translateX(120%)}to{transform:none}}
+@keyframes tout{to{transform:translateX(130%)}}
+
+/* title */
+#title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(16,15,29,.35),rgba(16,15,29,.78))}
+#title h1{font-family:var(--display);font-size:clamp(28px,7vw,64px);line-height:1.1;margin:0;color:var(--gold);text-shadow:4px 4px 0 #6b2c1a,8px 8px 0 #07060f;letter-spacing:.02em}
+#title .st{font-size:clamp(22px,3.2vw,30px);color:var(--paper);text-shadow:2px 2px 0 #07060f}
+#title .by{font-family:var(--display);font-size:9px;color:var(--muted);text-shadow:2px 2px 0 #07060f}
+#title .tb{display:flex;flex-direction:column;gap:10px;min-width:min(260px,100%)}
+#title .tb button{font-size:11px;padding:13px 16px}
+.blink{animation:bl 1.1s steps(2) infinite}
+@keyframes bl{50%{opacity:.25}}
+
+/* touch controls */
+#touch{position:absolute;inset:auto 0 0 0;height:0;pointer-events:none}
+#dpad{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 18px);width:138px;height:138px;pointer-events:auto}
+#dpad button{position:absolute;width:46px;height:46px;padding:0;font-size:12px;background:rgba(38,35,74,.85);color:var(--paper)}
+#dpad .u{left:46px;top:0}#dpad .d{left:46px;top:92px}#dpad .l{left:0;top:46px}#dpad .r{left:92px;top:46px}
+#abtn{position:absolute;right:max(20px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 40px);width:72px;height:72px;border-radius:50%;font-size:14px;pointer-events:auto}
+
+/* scheduler */
+.tl{position:relative;height:30px;background:#14122a;box-shadow:0 0 0 2px var(--line);margin:4px 0 12px}
+.tl .bar{position:absolute;top:4px;bottom:4px;font-family:var(--display);font-size:7px;color:var(--night);display:flex;align-items:center;padding:0 4px;overflow:hidden;white-space:nowrap}
+.tl .bar.x{outline:3px solid var(--rose)}
+.ticks{display:flex;justify-content:space-between;font-size:16px;color:var(--muted)}
+.srow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}
+.srow .nm{flex:1;min-width:150px;font-size:21px}
+.srow button.on{background:var(--teal)}
+/* landing page mock */
+.lp{background:#fbf7ee;color:#222;font-family:system-ui,sans-serif;padding:12px;font-size:13px;line-height:1.3;box-shadow:0 0 0 2px var(--line);min-width:0}
+.lp .nav{display:flex;justify-content:space-between;font-size:10px;color:#777;margin-bottom:10px}
+.lp .hl{font-size:17px;font-weight:700;line-height:1.15;margin-bottom:8px}
+.lp .fs{display:grid;gap:4px;margin-bottom:10px}
+.lp .fs div{background:#ece6d8;padding:5px 7px;font-size:12px}
+.lp .cta{display:inline-block;background:#2f6fde;color:#fff;padding:6px 10px;font-weight:600;font-size:12px}
+.lp.before .hl{font-size:14px;color:#555}
+.lp.before .cta{background:#999}
+/* bars */
+.chart{display:flex;align-items:flex-end;gap:10px;height:190px;padding:10px 10px 0;background:#14122a;box-shadow:0 0 0 2px var(--line)}
+.chart .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;cursor:pointer;min-width:0;background:none;padding:0;box-shadow:none;border-radius:0;font-family:var(--body);color:var(--paper)}
+.chart .col .v{font-size:18px}
+.chart .col .bb{width:70%;background:var(--sky);box-shadow:inset -3px 0 0 rgba(0,0,0,.25)}
+.chart .col:hover .bb{background:var(--gold)}
+.chart .col.ok .bb{background:var(--teal)}
+.chart .col.bad .bb{background:var(--rose)}
+.xl{display:flex;gap:10px;padding:4px 10px 0}
+.xl span{flex:1;text-align:center;font-size:16px;color:var(--muted);line-height:1;min-width:0}
+.tabs{display:flex;gap:6px;margin:8px 0}
+.tabs button{background:var(--ink2);color:var(--paper)}
+.tabs button.on{background:var(--gold);color:var(--night)}
+table.dt{border-collapse:collapse;width:100%;font-size:19px}
+table.dt td,table.dt th{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+table.dt th{font-family:var(--display);font-size:7px;color:var(--muted);font-weight:normal}
+table.dt td:first-child,table.dt th:first-child{text-align:left}
+.scroll{overflow-x:auto}
+.mini{width:100%;image-rendering:pixelated;box-shadow:0 0 0 2px var(--line);display:block}
+.travel{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px}
+.travel button{font-size:8px;text-align:left;display:flex;justify-content:space-between;gap:6px}
+.copyrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:22px}
+.copyrow code{font-family:var(--body);background:var(--ink2);padding:2px 8px;-webkit-user-select:all;user-select:all}
+a{color:var(--sky)}
+@media (prefers-reduced-motion:reduce){.toast,.toast.out,.blink{animation:none}#fade{transition:none}}
+</style>
+
+</head>
+<body>
+<div id="app" tabindex="0" aria-label="Avin Quest game">
+  <canvas id="cv"></canvas>
+  <div id="hud" hidden>
+    <div id="loc" class="px-panel"><div class="t">AVIN QUEST</div><div class="n" id="locn">Avin Town</div></div>
+    <div id="btns">
+      <button id="bJ" aria-label="Quest journal"><span class="k">J</span> Journal</button>
+      <button id="bP" aria-label="Character profile"><span class="k">P</span> Profile</button>
+      <button id="bM" aria-label="Town map"><span class="k">M</span> Map</button>
+      <button id="bS" aria-label="Toggle sound">Sound: on</button>
+      <button id="bE" aria-label="Menu"><span class="k">Esc</span> Menu</button>
+    </div>
+  </div>
+  <div id="tracker" class="px-panel" hidden></div>
+  <div id="help" hidden>WASD / ARROWS: MOVE &nbsp; E / SPACE: INTERACT &nbsp; J: JOURNAL &nbsp; M: MAP</div>
+  <div id="prompt" hidden></div>
+  <div id="toasts"></div>
+  <div id="touch" hidden>
+    <div id="dpad"><button class="u" data-k="up" aria-label="Up">&#9650;</button><button class="l" data-k="left" aria-label="Left">&#9664;</button><button class="r" data-k="right" aria-label="Right">&#9654;</button><button class="d" data-k="down" aria-label="Down">&#9660;</button></div>
+    <button id="abtn" aria-label="Interact">E</button>
+  </div>
+  <div id="dlg" class="px-panel" hidden>
+    <canvas id="dpor" width="24" height="24"></canvas>
+    <div class="body"><div class="nm" id="dnm"></div><div class="tx" id="dtx"></div>
+      <div class="row"><button class="ghost small" id="dskip">Skip</button><button class="small" id="dnext">Next &#9656;</button></div></div>
+  </div>
+  <div id="title">
+    <h1>AVIN QUEST</h1>
+    <div class="st">One Guy. Many Adventures. Too Many Side Quests.</div>
+    <div class="tb">
+      <button id="tStart">Start Adventure</button>
+      <button id="tCont" class="ghost" hidden>Continue Adventure</button>
+      <button id="tHow" class="ghost">How to Play</button>
+    </div>
+    <div id="tWarn" class="by" hidden>Starting over clears your saved progress. <button id="tYes" class="small">Start over</button></div>
+    <div class="by">An interactive CV of Avin Gaur &middot; about 5 minutes</div>
+  </div>
+  <div id="modal" hidden><div id="mbox" class="px-panel" role="dialog" aria-modal="true"></div></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   CONTENT — personal facts and game text. Edit here; no gameplay code.
+   Real facts come from Avin's CV. Mini-game businesses are fictional.
+   ===================================================================== */
+const PROFILE = {
+  name: 'Avin Gaur',
+  email: 'avingaur.iitd@gmail.com',
+  linkedin: 'https://www.linkedin.com/in/avin-gaur/',
+  cvUrl: '', // paste a public link to your CV PDF here to show a "Download CV" button
+  whyWispr: [
+    "I dictated the brief for this game with Wispr Flow. Talking was faster than typing, and the words came out sounding like me. That's the whole pitch, and I bought it.",
+    "Growth is where the things in this town meet: understanding users like a product person, reading the numbers like an analyst, and testing ideas fast like a founder.",
+    "India is a huge, multilingual market where speaking may be the most natural way to write. I'd love to help work out how Wispr Flow wins it."
+  ]
+};
+
+const BUILDINGS = {
+  iit:      { name:'IIT Delhi',          lobby:'lobby_iit',      rooms:['academics','bnc','placement','arena','classroom','community'] },
+  startup:  { name:'Startup Garage',     lobby:'lobby_startup',  rooms:['glexica','wootz'] },
+  vc:       { name:'Venture Capital',    lobby:'lobby_vc',       rooms:['campus','mounttech'] },
+  consult:  { name:'Consulting Office',  lobby:'lobby_consult',  rooms:['kepler'] },
+  research: { name:'Research Lab',       lobby:'lobby_research', rooms:['haas'] },
+  future:   { name:'Future Lab',         lobby:'future',         rooms:[] }
+};
+
+const QUESTS = {
+  academics:{ b:'iit', name:'Academics', plaque:'ACADEMICS', title:'Three Curious Things', ach:'Curious Mind', icon:'book', color:'#4f86e0', skills:['Curiosity','Research'],
+    objs:[{id:'items',text:'Find 3 things on the desks that sum Avin up',n:3}],
+    reveal:{org:'IIT Delhi',role:'B.Tech, Textile Technology',dates:'Jul 2023 – May 2027',lines:[
+      'CGPA 8.05/10',
+      'Summer Undergraduate Research Award: an INR 25k+ grant from IRD, IIT Delhi for a research initiative (2026)',
+      'Alongside the degree: consulting, venture capital, startups and research, as the rest of this town shows']}},
+  bnc:{ b:'iit', name:'Business & Consulting Club', plaque:'BNC CLUB', title:'Kick Off a Project', ach:'Team Builder', icon:'people', color:'#e0884f', skills:['Leadership'],
+    objs:[{id:'docs',text:'Collect the brief, roster and plan',n:3},{id:'deliver',text:'Hand them to the project lead',n:1}],
+    reveal:{org:'Business & Consulting Club, IIT Delhi',role:'Vice President',dates:'Apr 2026 – Present',lines:[
+      'Led outreach to 50+ startups, setting up the club’s startup projects vertical and onboarding an Accel-backed fintech venture',
+      'Partnered with 7+ clubs and 5+ colleges to make onboarding for inter-college case study projects smoother']}},
+  placement:{ b:'iit', name:'Placement Office', plaque:'PLACEMENT', title:'Placement Day Chaos', ach:'Operations Master', icon:'cal', color:'#58b368', skills:['Operations'],
+    objs:[{id:'sched',text:'Schedule 3 companies with no clashes',n:1}],
+    reveal:{org:'Office of Career Services, IIT Delhi',role:'Student Placement Executive',dates:'May 2024 – May 2025',lines:[
+      'Headed placement drive days: 10+ companies, 50+ offers, a 70% increase on the previous year',
+      'Awarded Best Contribution by the IIT Delhi Senate for coordinating institute-wide training and placement activities']}},
+  arena:{ b:'iit', name:'Competition Arena', plaque:'ARENA', title:'Trophy Stories', ach:'Competitive Spirit', icon:'trophy', color:'#e2b33b', skills:['Entrepreneurship','Analytical Thinking'],
+    objs:[{id:'stories',text:'Read 3 trophy stories',n:3}],
+    reveal:{org:'Competitions',role:'Wins and placings',dates:'',lines:[
+      'Winner, AIdeate (GPAI Turing Korea): top 3% in a global AI-based case competition',
+      'Winner, Eightfold.ai Hackathon (IIT Kanpur): built a High-Trust Talent Intelligence platform',
+      'Winner, FYCF Contest (BECon’25, eDC IIT Delhi): startup and business pitch ideas',
+      'Top 6, Inter IIT Tech 14.0: part of the IIT Delhi contingent placed 6th among 23+ IITs']}},
+  classroom:{ b:'iit', name:'Classroom of Change', plaque:'CLASSROOM', title:'Speak Up for the Class', ach:'Student Advocate', icon:'mega', color:'#cf5d7a', skills:['Leadership'],
+    objs:[{id:'feedback',text:'Collect feedback from students',n:2},{id:'faculty',text:'Take it to the faculty advisor',n:1}],
+    reveal:{org:'Co-Curricular and Academic Interaction Council, IIT Delhi',role:'Class Representative',dates:'Jul 2024 – Apr 2025',lines:[
+      'Helped bring about a grading policy revision that lowered requirements by two grade units, enabling 10+ students to pass',
+      'Acted as the link between students and faculty, contributing to better grading policies across batches']}},
+  community:{ b:'iit', name:'Community Corner', plaque:'COMMUNITY', title:'Giving Back', ach:'Community Contributor', icon:'heart', color:'#e86a8e', skills:['Leadership'],
+    objs:[{id:'mentor',text:'Talk to the community mentor',n:1},{id:'records',text:'Read the volunteering records',n:2}],
+    reveal:{org:'Volunteering',role:'Bachpan Program and UBA Khurrampur',dates:'',lines:[
+      'Bachpan Program: mentored 10+ underprivileged students in academic concepts',
+      'Unnat Bharat Abhiyan, Khurrampur: assessed 7+ rural sustainability issues for community development initiatives']}},
+  glexica:{ b:'startup', name:'Glexica Product Lab', plaque:'GLEXICA', title:'Fix the Landing Page', ach:'Product Builder', icon:'layout', color:'#7b6cf0', skills:['Product Thinking'],
+    objs:[{id:'page',text:'Fix the landing page on the big screen',n:1}],
+    reveal:{org:'Glexica — AI SaaS startup by IIT Delhi alumni',role:'Founder’s Office Intern',dates:'Sep 2025 – Dec 2025',lines:[
+      'Reviewed 50+ YC startup landing pages and redesigned the site to show off 5+ core features, boosting retention by 30%',
+      'Commended by founder Arush Bansal for proactive ownership and consistent contributions across projects']}},
+  wootz:{ b:'startup', name:'Wootz Work RFQ Factory', plaque:'WOOTZ WORK', title:'The RFQ Detective', ach:'Data Detective', icon:'magnify', color:'#5aa7c9', skills:['Analytical Thinking'],
+    objs:[{id:'rfq',text:'Pick the RFQ worth chasing on the dashboard',n:1}],
+    reveal:{org:'Wootz Work — industrial manufacturing',role:'Current internship',dates:'Ongoing',lines:[
+      'Cleaning and consolidating RFQ (request for quotation) data into structured fields',
+      'Region-wise analysis across NAM, EMEA and ANZ, plus margin analysis',
+      'Categorising materials of construction and product families',
+      'Tracking which customers turn quotes into purchase orders',
+      'Developing an opportunity scoring model to rank RFQs (work in progress, not yet validated)']}},
+  campus:{ b:'vc', name:'Campus Fund', plaque:'CAMPUS FUND', title:"The Investor's Challenge", ach:"Investor's Instinct", icon:'coin', color:'#3fb58e', skills:['Investment Analysis'],
+    objs:[{id:'pick',text:'Pick one pitch for deeper diligence',n:1}],
+    reveal:{org:'Campus Fund — $100M student-focused VC fund',role:'Student Investment Associate',dates:'Jan 2026 – Apr 2026',lines:[
+      'The only Investment Associate selected from IIT Delhi, out of 400+ students, for the fund’s 15-member investment team',
+      'Led commercial due diligence and wrote investment memos for 2 startups, contributing to INR 10 Cr in funding offers',
+      'Evaluated 40+ startups across DeepTech, AI, SaaS and FinTech; ran founder pitch calls and screened opportunities']}},
+  mounttech:{ b:'vc', name:'MountTech Growth Fund', plaque:'MOUNTTECH', title:'Deeptech Risk Files', ach:'DeepTech Explorer', icon:'gear', color:'#8a7dd8', skills:['Investment Analysis','Research'],
+    objs:[{id:'files',text:'Spot the main risk in 3 startup files',n:3}],
+    reveal:{org:'MountTech Growth Fund — $50M DeepTech VC fund',role:'Analyst Intern',dates:'Dec 2024 – Jan 2025',lines:[
+      'Contributed to an INR 4 Cr+ early-stage investment thesis, scouting and evaluating 25+ defence and aerospace startups',
+      'Produced 30+ insights on Industry 4.0 in manufacturing, identifying drivers of 20%+ gains in operational efficiency']}},
+  kepler:{ b:'consult', name:'Kepler Cannon Analytics Office', plaque:'KEPLER CANNON', title:'The Missing Revenue Mystery', ach:'Analytics Detective', icon:'chart', color:'#e0674f', skills:['Analytical Thinking'],
+    objs:[{id:'leak',text:'Find the leak on the dashboard',n:1}],
+    reveal:{org:'Kepler Cannon',role:'Associate Consultant Intern',dates:'May 2026 – Jul 2026',lines:[
+      'Made profitability analysis 2× faster on a 120M+ row DirectQuery dataset by building interactive executive dashboards',
+      'Identified $5M+ in revenue leakage with a reusable analytics framework spanning 5+ dashboard screens for the SteerCo',
+      'Benchmarked 20+ financial institutions using SEC filings, earnings calls and FDIC data',
+      'Received a return offer: joining as an Associate Consultant']}},
+  haas:{ b:'research', name:'Berkeley Haas Research Lab', plaque:'HAAS LAB', title:'The Energy Puzzle', ach:'Research Scholar', icon:'flask', color:'#4fb0b5', skills:['Research'],
+    objs:[{id:'puzzle',text:'Solve the puzzle on the survey board',n:1}],
+    reveal:{org:'Haas School of Business, UC Berkeley',role:'Research Intern, Economic Analysis & Policy',dates:'Apr 2025 – May 2025',lines:[
+      'Worked with CEEW on a three-arm intervention worth INR 5L+, analysing LPG usage patterns across 4+ approaches',
+      'Co-authored 5+ strategy reports contributing to a 12% improvement in 1+1 gas stove adoption in the target community',
+      'Received a Letter of Recommendation from Prof. Levine, Chair of the Haas Economic Analysis & Policy group']}}
+};
+const ROOM_IDS = Object.keys(QUESTS);
+const EXTRA_ACH = {
+  startup_explorer:{ name:'Startup Explorer', icon:'rocket', color:'#f08a3c', note:'Finished both Startup Garage rooms' },
+  future:{ name:'Next Chapter Unlocked', icon:'star', color:'#f4b740', note:'Met Avin in the Future Lab' }
+};
+const SKILLS = ['Analytical Thinking','Leadership','Product Thinking','Investment Analysis','Research','Operations','Curiosity','Entrepreneurship'];
+const UNLOCK_AT = 4;
+
+/* ===================== helpers ===================== */
+const T = 16;
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const hash = (x,y) => { const s = Math.sin(x*127.1 + y*311.7) * 43758.5453; return s - Math.floor(s); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function R(g,x,y,w,h,c){ g.fillStyle=c; g.fillRect(x,y,w,h); }
+
+/* 3x5 bitmap font for in-world signs */
+const FONT = (()=>{ const d={
+ A:'010101111101101',B:'110101110101110',C:'011100100100011',D:'110101101101110',E:'111100110100111',F:'111100110100100',
+ G:'011100101101011',H:'101101111101101',I:'111010010010111',J:'001001001101010',K:'101101110101101',L:'100100100100111',
+ M:'101111111101101',N:'110101101101101',O:'010101101101010',P:'110101110100100',Q:'010101101110011',R:'110101110101101',
+ S:'011100010001110',T:'111010010010010',U:'101101101101111',V:'101101101101010',W:'101101111111101',X:'101101010101101',
+ Y:'101101010010010',Z:'111001010100111','0':'111101101101111','1':'010110010010111','2':'110001010100111','3':'110001010001110',
+ '4':'101101111001001','5':'111100110001110','6':'011100111101111','7':'111001010010010','8':'111101111101111','9':'111101111001110',
+ '&':'010101010101011','-':'000000111000000','.':'000000000000010','!':'010010010000010','?':'110001010000010',':':'000010000010000',
+ '/':'001001010100100','+':'000010111010000','$':'011110010011110','%':'101001010100101',"'":'010010000000000',' ':'000000000000000'};
+ return d; })();
+function textW(s){ return s.length*4-1; }
+function drawText(g,s,x,y,c,sc=1){ g.fillStyle=c; s=s.toUpperCase(); x=Math.round(x); y=Math.round(y);
+  for(let i=0;i<s.length;i++){ const b=FONT[s[i]]||FONT[' '];
+    for(let k=0;k<15;k++) if(b[k]==='1') g.fillRect(x+(i*4+(k%3))*sc, y+Math.floor(k/3)*sc, sc, sc); } }
+
+/* 7x7 icons for badges and collectibles */
+const ICONS = {
+ book:['#######','#..#..#','#..#..#','#..#..#','#..#..#','#######','...#...'],
+ people:['.#...#.','###.###','.#...#.','###.###','#.#.#.#','#.#.#.#','.......'],
+ cal:['#.#.#.#','#######','#.....#','#.#.#.#','#.....#','#.#.#.#','#######'],
+ trophy:['#######','#.###.#','.#####.','..###..','...#...','..###..','.#####.'],
+ mega:['.....#.','...###.','#####.#','#####.#','...###.','..#..#.','..#....'],
+ heart:['.......','.##.##.','#######','#######','.#####.','..###..','...#...'],
+ layout:['#######','#.....#','#######','#.#...#','#.#.#.#','#.#...#','#######'],
+ magnify:['.###...','#...#..','#...#..','#...#..','.####..','....##.','.....##'],
+ coin:['..###..','.#.#.#.','#.###.#','#..#..#','#.###.#','.#.#.#.','..###..'],
+ gear:['..#.#..','.#####.','##...##','.#...#.','##...##','.#####.','..#.#..'],
+ chart:['......#','.....##','...#.##','..##.##','#.##.##','#.##.##','#######'],
+ flask:['..###..','...#...','...#...','..#.#..','.#...#.','#.###.#','#######'],
+ star:['...#...','...#...','#######','.#####.','..###..','.##.##.','#.....#'],
+ rocket:['...#...','..###..','..#.#..','..###..','.#####.','#.#.#.#','..#.#..']
+};
+function drawIcon(g,name,x,y,c,sc=1){ const ic=ICONS[name]; g.fillStyle=c;
+  for(let r=0;r<7;r++) for(let k=0;k<7;k++) if(ic[r][k]==='#') g.fillRect(x+k*sc,y+r*sc,sc,sc); }
+function shade(hex,amt){ const n=parseInt(hex.slice(1),16); let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;
+  r=clamp(r,0,255); g=clamp(g,0,255); b=clamp(b,0,255); return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1); }
+function badgeCanvas(icon,color){ const c=document.createElement('canvas'); c.width=16; c.height=16; const g=c.getContext('2d');
+  const rows=[[5,6],[3,10],[2,12],[1,14],[1,14],[1,14],[1,14],[1,14],[1,14],[1,14],[1,14],[2,12],[3,10],[5,6]];
+  rows.forEach((r,i)=>{ R(g,r[0]-1,i+1,r[1]+2,1,'#07060f'); }); R(g,4,0,8,1,'#07060f'); R(g,4,15,8,1,'#07060f');
+  rows.forEach((r,i)=>{ R(g,r[0],i+1,r[1],1,color); });
+  rows.forEach((r,i)=>{ if(i<6) R(g,r[0],i+1,2,1,shade(color,40)); if(i>8) R(g,r[0]+r[1]-2,i+1,2,1,shade(color,-40)); });
+  drawIcon(g,icon,4,4,'#fff6e2'); return c; }
+
+/* ===================== save state ===================== */
+const SAVE_KEY='avinquest.v1';
+function newState(){ return { q:{}, ach:[], flags:{}, scene:'town', x:18*T, y:16*T+12, dir:'up', guide:false, sound:true, futureSeen:false }; }
+function loadState(){ try{ const s=localStorage.getItem(SAVE_KEY); if(s){ const o=JSON.parse(s); if(o && o.q) return Object.assign(newState(),o); } }catch(e){} return null; }
+let S = loadState() || newState();
+let hasSave = !!loadState();
+function save(){ try{ S.scene=scene?scene.id:S.scene; S.x=P.x; S.y=P.y; S.dir=P.dir; localStorage.setItem(SAVE_KEY,JSON.stringify(S)); hasSave=true; }catch(e){} }
+function wipe(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} const snd=S.sound; S=newState(); S.sound=snd; hasSave=false; }
+const qs = id => S.q[id] || (S.q[id] = { p:{}, done:false, started:false });
+const doneCount = () => ROOM_IDS.filter(id => S.q[id] && S.q[id].done).length;
+const futureOpen = () => doneCount() >= UNLOCK_AT;
+function objDone(id,o){ const ob=QUESTS[id].objs.find(x=>x.id===o); return (qs(id).p[o]||0) >= ob.n; }
+function progress(id,o,flag){ if(flag){ if(S.flags[flag]) return false; S.flags[flag]=1; }
+  const st=qs(id); st.started=true; const ob=QUESTS[id].objs.find(x=>x.id===o);
+  st.p[o]=Math.min(ob.n,(st.p[o]||0)+1); Snd.get(); save(); updateTracker();
+  if(QUESTS[id].objs.every(x=>(st.p[x.id]||0)>=x.n)) whenFree(()=>completeQuest(id));
+  return true; }
+
+function whenFree(fn){ const iv=setInterval(()=>{ if(!dlgOpen&&!modalOpen&&!fading){ clearInterval(iv); setTimeout(fn,150); } },100); }
+/* ===================== audio (generated in-browser) ===================== */
+const Snd = {
+  ac:null, mg:null, music:null, step:0,
+  init(){ if(this.ac) return; try{ this.ac=new (window.AudioContext||window.webkitAudioContext)(); this.mg=this.ac.createGain(); this.mg.gain.value=1; this.mg.connect(this.ac.destination); }catch(e){} },
+  tone(f,d,type='square',v=.05,w=0){ if(!this.ac||!S.sound) return; const t=this.ac.currentTime+w; const o=this.ac.createOscillator(), g=this.ac.createGain();
+    o.type=type; o.frequency.value=f; g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(this.mg); o.start(t); o.stop(t+d+.02); },
+  blip(){ this.tone(660,.03,'square',.015); },
+  talk(){ this.tone(520,.05,'square',.03); },
+  door(){ this.tone(220,.08,'triangle',.08); this.tone(330,.1,'triangle',.06,.06); },
+  get(){ [660,880,1320].forEach((f,i)=>this.tone(f,.09,'square',.04,i*.06)); },
+  bad(){ this.tone(180,.15,'sawtooth',.04); },
+  ach(){ [523,659,784,1047,784,1047].forEach((f,i)=>this.tone(f,.12,'square',.045,i*.09)); },
+  startMusic(){ if(this.music||!this.ac) return; const notes=[262,330,392,494,440,392,330,294, 262,330,392,523,494,392,349,330];
+    const bass=[131,131,165,165,110,110,147,147];
+    this.music=setInterval(()=>{ if(!S.sound) return; const i=this.step++%16; this.tone(notes[i],.22,'triangle',.018);
+      if(i%2===0) this.tone(bass[(i/2)%8],.4,'sine',.03); },280); }
+};
+
+/* ===================== pixel art: characters ===================== */
+const LOOKS = {
+  avin:{skin:'#c68a62',hair:'#23180f',style:'spiky',shirt:'#2f4f96',pants:'#3a3446',shoe:'#1c1a24'},
+  guide:{skin:'#e0a77f',hair:'#7a3b1d',style:'long',shirt:'#3fa37a',pants:'#3a3446',shoe:'#2a2030'},
+  recruiter:{skin:'#f0c7a2',hair:'#d9c27a',style:'bun',shirt:'#5a5f6e',pants:'#24222e',shoe:'#111',glasses:true},
+  prof:{skin:'#d9a07a',hair:'#d8d8d8',style:'short',shirt:'#7c5a3a',pants:'#3d3a33',shoe:'#1c1a1a',glasses:true},
+  student:{skin:'#b97a55',hair:'#141018',style:'short',shirt:'#c9473e',pants:'#2e3a5c',shoe:'#1c1a24'},
+  student2:{skin:'#e6b08a',hair:'#3a2214',style:'long',shirt:'#e1a23a',pants:'#3a3446',shoe:'#1c1a24'},
+  lead:{skin:'#a86c48',hair:'#1a1210',style:'short',shirt:'#e0884f',pants:'#2b2a3a',shoe:'#151318'},
+  founder:{skin:'#e8b996',hair:'#5a2d18',style:'cap',hat:'#3c6ee0',shirt:'#f2e2b8',pants:'#4a4a58',shoe:'#222'},
+  coord:{skin:'#c88d66',hair:'#2a1d14',style:'bun',shirt:'#58b368',pants:'#2e2c3a',shoe:'#1c1a24'},
+  candidate:{skin:'#d9a37c',hair:'#1b1513',style:'short',shirt:'#e8e4da',pants:'#262a3e',shoe:'#111',glasses:true},
+  announcer:{skin:'#9c6142',hair:'#0f0c0c',style:'spiky',shirt:'#a14fd1',pants:'#1f1d2b',shoe:'#111'},
+  faculty:{skin:'#e3b38e',hair:'#7e7e86',style:'bald',shirt:'#3b5b88',pants:'#2b2a33',shoe:'#151318',glasses:true},
+  mentor:{skin:'#b47a54',hair:'#3a2418',style:'long',shirt:'#e86a8e',pants:'#3b3346',shoe:'#1c1a24'},
+  techie:{skin:'#e4ae88',hair:'#2a1a12',style:'spiky',shirt:'#7b6cf0',pants:'#2e2c3a',shoe:'#1c1a24',glasses:true},
+  manager:{skin:'#b07650',hair:'#222',style:'cap',hat:'#f2b134',shirt:'#5d7488',pants:'#3a3a40',shoe:'#1a1a1a'},
+  partner:{skin:'#dca883',hair:'#4a2c1c',style:'short',shirt:'#20304f',pants:'#1c2236',shoe:'#111'},
+  analyst:{skin:'#a8714c',hair:'#111',style:'bun',shirt:'#8a7dd8',pants:'#262438',shoe:'#111',glasses:true},
+  recep:{skin:'#e7b994',hair:'#24170f',style:'long',shirt:'#e0674f',pants:'#2b2a3a',shoe:'#151318'},
+  em:{skin:'#c0855e',hair:'#1a1412',style:'short',shirt:'#2c3e57',pants:'#1d2433',shoe:'#0f0f12',glasses:true},
+  researcher:{skin:'#d49c74',hair:'#5c3a22',style:'bun',shirt:'#ffffff',pants:'#3a4250',shoe:'#1a1a1a',glasses:true},
+  manager2:{skin:'#c99068',hair:'#2b1c12',style:'spiky',shirt:'#f08a3c',pants:'#2e2c3a',shoe:'#151318'},
+  robot:{robot:true}
+};
+function drawChar(g,x,y,dir,fr,L,t=0,lockedRobot=false){
+  const ox=Math.round(x-6), oy=Math.round(y-18);
+  g.fillStyle='rgba(0,0,0,.22)'; g.fillRect(ox+2,oy+16,8,2); g.fillRect(ox+3,oy+17,6,1);
+  if(L.robot){ const c=lockedRobot?'#ef7470':'#4cc7ad'; const b=Math.round(Math.sin(t*3));
+    R(g,ox+5,oy+1+b,2,3,'#9aa0b5'); R(g,ox+5,oy+b,2,1,c);
+    R(g,ox+1,oy+4+b,10,8,'#07060f'); R(g,ox+2,oy+5+b,8,6,'#c8ccd8'); R(g,ox+3,oy+6+b,6,4,'#20243a'); R(g,ox+4,oy+7+b,1,2,c); R(g,ox+7,oy+7+b,1,2,c);
+    R(g,ox+2,oy+12,8,4,'#07060f'); R(g,ox+3,oy+12,6,3,'#8a90a8'); R(g,ox+3,oy+15,2,2,'#4b5068'); R(g,ox+7,oy+15,2,2,'#4b5068'); return; }
+  const flip = dir==='left', side = dir==='left'||dir==='right';
+  const P=(dx,dy,w,h,c)=>{ g.fillStyle=c; g.fillRect(flip? ox+12-dx-w : ox+dx, oy+dy, w, h); };
+  const bob = (fr===1||fr===3)?1:0; const OL='#140f18';
+  const ld = fr===1 ? 1 : 0, rd = fr===3 ? 1 : 0;
+  // legs
+  if(!side){ P(2,12,3,6-ld,OL); P(7,12,3,6-rd,OL); P(3,13,2,3-ld,L.pants); P(7,13,2,3-rd,L.pants); P(3,16-ld,2,1,L.shoe); P(7,16-rd,2,1,L.shoe); }
+  else { const a=fr===1?-1:fr===3?1:0; P(3+a,12,3,6,OL); P(6-a,12,3,6,OL); P(4+a,13,2,3,L.pants); P(6-a,13,2,3,shade(L.pants,-15)); P(4+a,16,2,1,L.shoe); P(6-a,16,2,1,L.shoe); }
+  // body
+  const by=bob;
+  if(!side){ P(1,7+by,10,7,OL); P(2,8+by,8,5,L.shirt); P(2,12+by,8,1,shade(L.shirt,-35)); P(1,9+by,1,3,L.shirt); P(10,9+by,1,3,L.shirt);
+    P(0,8+by,1,5,OL); P(11,8+by,1,5,OL); P(1,12+by,1,1,L.skin); P(10,12+by,1,1,L.skin); }
+  else { P(2,7+by,8,7,OL); P(3,8+by,6,5,L.shirt); P(3,12+by,6,1,shade(L.shirt,-35)); const sw=fr===1?1:fr===3?-1:0; P(5+sw,9+by,2,3,shade(L.shirt,-20)); P(5+sw,12+by,2,1,L.skin); }
+  // head
+  if(!side){ P(1,0+by,10,8,OL); P(2,1+by,8,6,L.skin); P(5,7+by,2,1,shade(L.skin,-25)); }
+  else { P(2,0+by,9,8,OL); P(3,1+by,7,6,L.skin); }
+  // hair
+  const H=L.hair, st=L.style;
+  if(dir==='down'){
+    if(st!=='bald'){ P(2,1+by,8,2,H); P(2,3+by,1,1,H); P(9,3+by,1,1,H); }
+    if(st==='spiky'){ P(2,0+by,2,1,H); P(5,0+by,2,1,H); P(8,0+by,2,1,H); P(4,3+by,2,1,H); }
+    if(st==='long'){ P(1,2+by,1,6,H); P(10,2+by,1,6,H); P(2,3+by,1,4,H); P(9,3+by,1,4,H); }
+    if(st==='bun'){ P(4,-2+by,4,2,OL); P(5,-2+by,2,2,H); }
+    if(st==='cap'){ P(1,0+by,10,3,OL); P(2,0+by,8,2,L.hat); P(2,2+by,8,1,shade(L.hat,-40)); }
+    if(st==='bald'){ P(3,1+by,6,1,H); P(2,2+by,1,2,H); P(9,2+by,1,2,H); P(5,1+by,2,1,shade(L.skin,25)); }
+    P(4,4+by,1,2,'#1a1220'); P(7,4+by,1,2,'#1a1220');
+    if(L.glasses){ P(3,4+by,3,1,'#1a1220'); P(6,4+by,3,1,'#1a1220'); P(3,5+by,1,1,'#1a1220'); P(8,5+by,1,1,'#1a1220'); }
+    P(3,6+by,1,1,shade(L.skin,-10)); P(8,6+by,1,1,shade(L.skin,-10));
+  } else if(dir==='up'){
+    if(st!=='bald'){ P(2,1+by,8,5,H); } else { P(2,3+by,8,3,H); }
+    if(st==='spiky'){ P(2,0+by,2,1,H); P(5,0+by,2,1,H); P(8,0+by,2,1,H); }
+    if(st==='long'){ P(1,2+by,1,6,H); P(10,2+by,1,6,H); P(2,6+by,8,2,H); }
+    if(st==='bun'){ P(4,-2+by,4,2,OL); P(5,-2+by,2,2,H); P(4,2+by,4,2,shade(H,20)); }
+    if(st==='cap'){ P(1,0+by,10,3,OL); P(2,0+by,8,3,L.hat); }
+  } else {
+    if(st!=='bald'){ P(3,1+by,7,2,H); P(3,3+by,2,3,H); } else { P(3,3+by,2,3,H); }
+    if(st==='spiky'){ P(3,0+by,2,1,H); P(6,0+by,2,1,H); P(9,1+by,1,1,H); }
+    if(st==='long'){ P(2,2+by,2,6,H); }
+    if(st==='bun'){ P(1,1+by,3,3,OL); P(2,2+by,2,1,H); }
+    if(st==='cap'){ P(2,0+by,9,3,OL); P(3,0+by,7,2,L.hat); P(8,2+by,3,1,shade(L.hat,-40)); }
+    P(8,4+by,1,2,'#1a1220');
+    if(L.glasses){ P(7,4+by,3,1,'#1a1220'); }
+    P(10,4+by,1,1,L.skin);
+  }
+}
+
+/* ===================== pixel art: props ===================== */
+const WOOD='#8a5a3a', WOODD='#5e3a24', WOODL='#b07a4e', OLX='#140f18';
+function bookColors(i){ return ['#c9473e','#3b6fd1','#e1a23a','#3fa37a','#8a5ad1','#e0e0d0','#d1684a'][i%7]; }
+const DRAW = {
+  desk(g,X,Y,w,h,p){ const W=w*T; R(g,X,Y-2,W,10,OLX); R(g,X+1,Y-1,W-2,8,WOODL); R(g,X+1,Y+6,W-2,1,WOODD); R(g,X+1,Y+7,W-2,7,WOOD);
+    R(g,X+2,Y+14,2,2,WOODD); R(g,X+W-4,Y+14,2,2,WOODD); R(g,X+W/2-4,Y+9,8,2,WOODD);
+    if(p.on==='pc'||p.on==='pc2'){ const cx=X+W/2-7; R(g,cx,Y-12,14,11,OLX); R(g,cx+1,Y-11,12,8,p.on==='pc2'?'#2b3a7a':'#1d3b4f'); R(g,cx+2,Y-10,6,1,'#7fd3ff'); R(g,cx+2,Y-8,8,1,'#4cc7ad'); R(g,cx+2,Y-6,4,1,'#f4b740'); R(g,cx+6,Y-2,2,2,OLX); }
+    if(p.on==='laptop'){ const cx=X+W/2-6; R(g,cx,Y-6,12,7,OLX); R(g,cx+1,Y-5,10,5,'#7fb6ff'); R(g,cx-1,Y+1,14,2,'#c8ccd8'); }
+    if(p.on==='papers'){ R(g,X+4,Y,8,6,'#f5ead2'); R(g,X+6,Y+1,8,6,'#e8dcc0'); R(g,X+W-12,Y+1,7,5,'#f5ead2'); }
+    if(p.on==='books'){ R(g,X+3,Y-2,10,3,'#c9473e'); R(g,X+4,Y-5,9,3,'#3b6fd1'); R(g,X+W-10,Y,6,5,'#e1a23a'); } },
+  table(g,X,Y,w,h,p){ const W=w*T,H=h*T; R(g,X,Y-2,W,H-2,OLX); R(g,X+1,Y-1,W-2,H-5,p.c||WOODL); R(g,X+1,Y+H-6,W-2,2,shade(p.c||WOODL,-40));
+    R(g,X+2,Y+H-4,2,4,WOODD); R(g,X+W-4,Y+H-4,2,4,WOODD);
+    if(p.on==='papers'){ R(g,X+6,Y+2,8,6,'#f5ead2'); R(g,X+W-14,Y+3,8,6,'#e8dcc0'); }
+    if(p.on==='cups'){ R(g,X+5,Y+3,3,4,'#f5ead2'); R(g,X+W-9,Y+4,3,4,'#f5ead2'); } },
+  bookshelf(g,X,Y,w,h,p){ const W=w*T; R(g,X,Y-20,W,36,OLX); R(g,X+1,Y-19,W-2,34,WOODD);
+    for(let s=0;s<3;s++){ const sy=Y-18+s*11; R(g,X+2,sy,W-4,9,'#3a2418'); let bx=X+3, i=Math.floor(hash(X,sy)*7);
+      while(bx<X+W-4){ const bw=2+Math.floor(hash(bx,sy)*2); const bh=6+Math.floor(hash(sy,bx)*3); if(p.unfinished&&hash(bx,s)<.5){ R(g,bx,sy+9-bh,bw,bh,'#f5ead2'); } else R(g,bx,sy+9-bh,bw,bh,bookColors(i++)); bx+=bw+1; }
+      R(g,X+1,sy+9,W-2,2,WOOD); } },
+  plant(g,X,Y){ R(g,X+4,Y+7,8,9,OLX); R(g,X+5,Y+8,6,7,'#c4683e'); R(g,X+5,Y+8,6,2,'#d98258');
+    [[8,-2,5],[4,2,4],[12,2,4],[8,4,4]].forEach(([cx,cy,r])=>{ for(let yy=-r;yy<=r;yy++){ const ww=Math.round(Math.sqrt(r*r-yy*yy)); R(g,X+cx-ww,Y+cy+yy,ww*2,1,yy<0?'#5fae55':'#3f8a45'); } }); },
+  chair(g,X,Y,w,h,p){ const c=p.c||'#4a6fa8'; R(g,X+3,Y-3,10,8,OLX); R(g,X+4,Y-2,8,6,c); R(g,X+3,Y+5,10,5,OLX); R(g,X+4,Y+5,8,3,shade(c,-25)); R(g,X+4,Y+10,2,3,OLX); R(g,X+10,Y+10,2,3,OLX); },
+  rug(g,X,Y,w,h,p){ const W=w*T,H=h*T; R(g,X,Y,W,H,p.c2||'#7a3b55'); R(g,X+3,Y+3,W-6,H-6,p.c||'#b05a6e'); for(let i=X+6;i<X+W-6;i+=8) R(g,i,Y+6,4,H-12,shade(p.c||'#b05a6e',12)); },
+  trophy(g,X,Y,w,h,p,t){ R(g,X+2,Y+3,12,13,OLX); R(g,X+3,Y+4,10,11,'#7d7a92'); R(g,X+3,Y+4,10,2,'#a7a4ba');
+    const c=p.c||'#f4b740', b=Math.round(Math.sin(t*2+X)*0.6); R(g,X+4,Y-9+b,8,8,OLX); R(g,X+5,Y-8+b,6,6,c); R(g,X+3,Y-7+b,1,3,c); R(g,X+12,Y-7+b,1,3,c); R(g,X+7,Y-2+b,2,3,c); R(g,X+5,Y+1+b,6,2,c); R(g,X+6,Y-7+b,1,2,'#fff6e2');
+    if(p.seen) R(g,X+6,Y+8,4,4,'#4cc7ad'); },
+  sofa(g,X,Y,w,h,p){ const W=w*T, c=p.c||'#4b5d8a'; R(g,X,Y-6,W,20,OLX); R(g,X+1,Y-5,W-2,8,shade(c,-20)); R(g,X+1,Y+3,W-2,8,c); R(g,X+1,Y-5,3,16,shade(c,-35)); R(g,X+W-4,Y-5,3,16,shade(c,-35)); for(let i=X+W/2;i<X+W-4;i+=W) R(g,i,Y+3,1,8,shade(c,-30)); },
+  beanbag(g,X,Y,w,h,p){ const c=p.c||'#e1a23a'; for(let yy=-6;yy<=6;yy++){ const ww=Math.round(Math.sqrt(49-yy*yy)); R(g,X+8-ww-1,Y+8+yy,ww*2+2,1,OLX); R(g,X+8-ww,Y+8+yy,ww*2,1,yy<0?shade(c,20):c); } },
+  vending(g,X,Y){ R(g,X,Y-16,16,32,OLX); R(g,X+1,Y-15,14,30,'#c9473e'); R(g,X+3,Y-13,8,18,'#9fd6ff'); for(let i=0;i<4;i++) for(let k=0;k<2;k++) R(g,X+4+k*4,Y-12+i*4,3,2,bookColors(i+k)); R(g,X+12,Y-12,2,6,'#f4b740'); R(g,X+3,Y+8,10,4,'#20243a'); },
+  coffee(g,X,Y,w,h,p,t){ R(g,X,Y,16,16,OLX); R(g,X+1,Y+1,14,14,WOOD); R(g,X+2,Y-14,12,16,OLX); R(g,X+3,Y-13,10,14,'#5c5f70'); R(g,X+5,Y-11,6,3,'#20243a'); R(g,X+6,Y-10,2,1,'#ef7470'); R(g,X+6,Y-5,4,4,'#f5ead2');
+    if(Math.sin(t*2)>0){ R(g,X+7,Y-8,1,2,'rgba(255,255,255,.6)'); } },
+  counter(g,X,Y,w,h,p){ const W=w*T; R(g,X,Y-4,W,20,OLX); R(g,X+1,Y-3,W-2,5,'#efe6d4'); R(g,X+1,Y+2,W-2,13,p.c||'#e0674f'); R(g,X+1,Y+2,W-2,1,shade(p.c||'#e0674f',-40)); if(p.text) drawText(g,p.text,X+W/2-textW(p.text)/2,Y+6,'#fff6e2'); },
+  machine(g,X,Y,w,h,p,t){ const W=w*T,H=h*T; R(g,X,Y-10,W,H+10,OLX); R(g,X+1,Y-9,W-2,H+8,'#6b7488'); R(g,X+1,Y-9,W-2,3,'#8b94a8'); R(g,X+4,Y-4,10,8,'#20243a');
+    R(g,X+5,Y-3,8*(0.5+0.5*Math.sin(t*3+X)),2,'#4cc7ad'); R(g,X+W-10,Y-4,6,6,'#20243a'); R(g,X+W-8,Y-2,2,2,Math.sin(t*5+X)>0?'#ef7470':'#5a2a2a');
+    for(let i=0;i<4;i++) R(g,X+4+i*6,Y+10,4,10,'#4b5068'); const pz=Math.round((Math.sin(t*4+X)+1)*3); R(g,X+W/2-3,Y+H-12-pz,6,6,'#c8ccd8'); },
+  crate(g,X,Y){ R(g,X+1,Y-2,14,18,OLX); R(g,X+2,Y-1,12,16,'#b07a4e'); R(g,X+2,Y-1,12,2,'#c98d5c'); R(g,X+2,Y+6,12,1,WOODD); R(g,X+7,Y-1,2,16,WOODD); },
+  rack(g,X,Y,w){ const W=w*T; R(g,X,Y-6,W,22,OLX); R(g,X+1,Y-5,W-2,20,'#3a3e4e'); for(let i=0;i<4;i++) R(g,X+2,Y-4+i*5,W-4,3,['#c8ccd8','#a7aec2','#d6a35a','#9aa0b5'][i]); },
+  cabinet(g,X,Y,w,h,p){ R(g,X+1,Y-12,14,28,OLX); R(g,X+2,Y-11,12,26,p.c||'#8a90a8'); for(let i=0;i<3;i++){ R(g,X+3,Y-9+i*8,10,6,shade(p.c||'#8a90a8',-20)); R(g,X+6,Y-7+i*8,4,1,'#f5ead2'); }
+    if(p.label) drawText(g,p.label,X+8-textW(p.label)/2,Y-17,'#f5ead2'); if(p.seen) R(g,X+5,Y-16,6,3,'#4cc7ad'); },
+  rocket(g,X,Y,w,h,p,t){ const cx=X+16; R(g,X-2,Y-44,2,58,'#8b94a8'); R(g,X+32,Y-44,2,58,'#8b94a8'); for(let i=0;i<5;i++) R(g,X-2,Y-40+i*11,36,1,'#6b7488');
+    R(g,cx-7,Y-36,14,46,OLX); R(g,cx-6,Y-35,12,44,'#f5ead2'); R(g,cx-4,Y-44,8,9,OLX); R(g,cx-3,Y-43,6,8,'#ef7470'); R(g,cx-1,Y-46,2,3,OLX);
+    R(g,cx-3,Y-26,6,6,OLX); R(g,cx-2,Y-25,4,4,'#7fd3ff'); R(g,cx-11,Y,6,10,'#ef7470'); R(g,cx+5,Y,6,10,'#ef7470'); R(g,cx-6,Y-12,12,8,'#5c5f70');
+    drawText(g,'WIP',cx-5,Y-11,'#f4b740'); R(g,cx-4,Y+10,8,4,'#4b5068'); if(Math.sin(t*6)>.6) R(g,cx+4,Y-18,2,2,'#f4b740'); },
+  holo(g,X,Y,w,h,p,t){ R(g,X+3,Y+8,10,6,OLX); R(g,X+4,Y+9,8,4,'#4b5068'); g.globalAlpha=.45+.25*Math.sin(t*4+X); const c=p.c||'#4cc7ad';
+    for(let i=0;i<14;i+=2) R(g,X+2,Y-8+i,12,1,c); R(g,X+5,Y-6,6,6,c); g.globalAlpha=1; },
+  drone(g,X,Y,w,h,p,t){ R(g,X+4,Y+6,8,10,OLX); R(g,X+5,Y+7,6,8,'#4b5068'); const b=Math.round(Math.sin(t*3)*1.5); R(g,X+1,Y-6+b,14,4,OLX); R(g,X+2,Y-5+b,12,2,'#c8ccd8'); R(g,X+6,Y-3+b,4,3,'#20243a');
+    R(g,X,Y-8+b,5,1,'#7fd3ff'); R(g,X+11,Y-8+b,5,1,'#7fd3ff'); },
+  satellite(g,X,Y,w,h,p,t){ R(g,X+6,Y+2,4,14,OLX); R(g,X+7,Y+3,2,12,'#8b94a8'); R(g,X+5,Y-6,6,8,OLX); R(g,X+6,Y-5,4,6,'#f4b740'); R(g,X-1,Y-4,6,4,'#3b6fd1'); R(g,X+11,Y-4,6,4,'#3b6fd1'); R(g,X+7,Y-9,2,3,'#c8ccd8'); },
+  arm(g,X,Y,w,h,p,t){ R(g,X+3,Y+8,10,8,OLX); R(g,X+4,Y+9,8,6,'#f2b134'); const a=Math.sin(t*1.5)*3; R(g,X+7,Y-2,3,11,'#f2b134'); R(g,X+7+Math.round(a),Y-6,7,3,'#f2b134'); R(g,X+13+Math.round(a),Y-7,2,5,'#4b5068'); },
+  stove(g,X,Y){ R(g,X+1,Y,14,16,OLX); R(g,X+2,Y+1,12,14,WOOD); R(g,X+2,Y-6,12,7,OLX); R(g,X+3,Y-5,10,5,'#4b5068'); R(g,X+4,Y-4,3,2,'#20243a'); R(g,X+9,Y-4,3,2,'#20243a');
+    R(g,X+5,Y+4,7,11,OLX); R(g,X+6,Y+5,5,9,'#d23c32'); R(g,X+7,Y+3,3,2,'#8b94a8'); },
+  easel(g,X,Y,w,h,p){ const W=w*T; R(g,X+3,Y+4,2,12,WOODD); R(g,X+W-5,Y+4,2,12,WOODD); R(g,X+1,Y-12,W-2,18,OLX); R(g,X+2,Y-11,W-4,16,'#f5ead2');
+    if(p.chart){ for(let i=0;i<4;i++){ const hh=3+Math.floor(hash(X,i)*9); R(g,X+4+i*3,Y+3-hh,2,hh,['#3b6fd1','#e0674f','#4cc7ad','#f4b740'][i]); } }
+    if(p.text) drawText(g,p.text,X+W/2-textW(p.text)/2,Y-9,'#20243a');
+    if(p.seen) R(g,X+W-6,Y-10,3,3,'#4cc7ad'); },
+  pingpong(g,X,Y,w,h){ const W=w*T,H=h*T; R(g,X,Y-2,W,H-4,OLX); R(g,X+1,Y-1,W-2,H-6,'#2f8a5a'); R(g,X+W/2-1,Y-3,2,H-4,'#f5ead2'); R(g,X+1,Y+H/2-3,W-2,1,'#f5ead2'); R(g,X+3,Y+H-6,2,6,OLX); R(g,X+W-5,Y+H-6,2,6,OLX); R(g,X+8,Y+3,2,2,'#f4b740'); },
+  cooler(g,X,Y){ R(g,X+3,Y-2,10,18,OLX); R(g,X+4,Y-1,8,16,'#e9eef0'); R(g,X+4,Y-12,8,11,OLX); R(g,X+5,Y-11,6,9,'#7fd3ff'); R(g,X+6,Y-10,2,6,'#bfe8ff'); R(g,X+5,Y+3,2,2,'#3b6fd1'); R(g,X+9,Y+3,2,2,'#ef7470'); },
+  item(g,X,Y,w,h,p,t){ if(S.flags[p.flag]) return; const b=Math.round(Math.sin(t*4+X)*1.5)-(p.lift||0);
+    if(Math.sin(t*6+X*0.3)>.3){ R(g,X+2,Y-6+b,1,1,'#fff6e2'); R(g,X+13,Y-2+b,1,1,'#fff6e2'); }
+    const c=p.c||'#f4b740'; R(g,X+3,Y-5+b,10,10,OLX); R(g,X+4,Y-4+b,8,8,c);
+    if(p.icon==='doc'){ R(g,X+4,Y-4+b,8,8,'#f5ead2'); R(g,X+5,Y-2+b,6,1,'#5c5f70'); R(g,X+5,Y+b,6,1,'#5c5f70'); R(g,X+5,Y+2+b,4,1,'#5c5f70'); R(g,X+10,Y-4+b,2,2,c); }
+    else if(p.icon==='book'){ R(g,X+4,Y-4+b,8,8,c); R(g,X+7,Y-4+b,1,8,shade(c,-50)); R(g,X+9,Y-2+b,2,1,'#fff6e2'); }
+    else { R(g,X+6,Y-2+b,4,4,'#fff6e2'); } },
+  bench(g,X,Y,w){ const W=w*T; R(g,X+1,Y,W-2,10,OLX); R(g,X+2,Y+1,W-4,2,WOODL); R(g,X+2,Y+4,W-4,2,WOODL); R(g,X+3,Y+7,2,6,OLX); R(g,X+W-5,Y+7,2,6,OLX); R(g,X+2,Y-4,W-4,4,OLX); R(g,X+3,Y-3,W-6,2,WOOD); },
+  lamp(g,X,Y,w,h,p,t){ R(g,X+6,Y-18,4,32,OLX); R(g,X+7,Y-17,2,30,'#3a3446'); R(g,X+4,Y-24,8,8,OLX); R(g,X+5,Y-23,6,6,'#ffe3a0'); R(g,X+5,Y+12,6,3,OLX); },
+  fountain(g,X,Y,w,h,p,t){ R(g,X,Y,32,30,OLX); R(g,X+1,Y+1,30,28,'#b9b2a6'); R(g,X+3,Y+3,26,22,'#4a8fd0'); R(g,X+3,Y+3,26,3,'#3a76b4');
+    for(let i=0;i<5;i++){ const xx=X+5+((i*7+Math.floor(t*8))%22); R(g,xx,Y+10+(i%3)*4,3,1,'#bfe2ff'); }
+    R(g,X+13,Y+6,6,10,OLX); R(g,X+14,Y+7,4,8,'#d6d0c4'); const s=Math.round(Math.sin(t*6)*1); R(g,X+15,Y-2+s,2,8,'#bfe2ff'); R(g,X+12,Y+0+s,2,2,'#bfe2ff'); R(g,X+18,Y+0-s,2,2,'#bfe2ff'); },
+  sign(g,X,Y,w,h,p){ R(g,X+7,Y-2,3,18,OLX); R(g,X+8,Y-1,1,16,WOODD); const sw=Math.max(24,textW(p.text||'')+8); R(g,X+8-sw/2,Y-12,sw,12,OLX); R(g,X+9-sw/2,Y-11,sw-2,10,WOODL); drawText(g,p.text||'',X+8-textW(p.text||'')/2,Y-9,'#3a2418'); },
+  board(g,X,Y,w,h,p){ const W=w*T; R(g,X+3,Y-2,2,18,OLX); R(g,X+W-5,Y-2,2,18,OLX); R(g,X,Y-16,W,18,OLX); R(g,X+1,Y-15,W-2,16,'#b98552');
+    R(g,X+3,Y-13,7,8,'#f5ead2'); R(g,X+12,Y-12,8,6,'#ffe3a0'); R(g,X+22,Y-13,7,9,'#bfe2ff'); R(g,X+6,Y-13,1,1,'#ef7470'); R(g,X+15,Y-12,1,1,'#ef7470'); R(g,X+25,Y-13,1,1,'#ef7470'); },
+  flowers(){}, tree(){}, bush(){}
+};
+/* wall decorations — drawn into the static layer */
+const WALLDRAW = {
+  window(g,X,Y,w){ const W=w*T; R(g,X+2,Y+5,W-4,18,OLX); R(g,X+3,Y+6,W-6,16,'#8fc7ff'); R(g,X+3,Y+6,W-6,5,'#b6dcff'); R(g,X+W/2-1,Y+6,2,16,OLX); R(g,X+3,Y+13,W-6,1,OLX); },
+  chalkboard(g,X,Y,w){ const W=w*T; R(g,X,Y+3,W,22,WOODD); R(g,X+2,Y+5,W-4,17,'#2f5a45'); for(let i=0;i<3;i++) R(g,X+6,Y+8+i*5,8+Math.floor(hash(X,i)*(W-20)),1,'#cfe3d6');
+    R(g,X+W-14,Y+8,8,8,'rgba(207,227,214,.6)'); R(g,X+2,Y+22,W-4,2,WOOD); },
+  whiteboard(g,X,Y,w,h,p){ const W=w*T; R(g,X,Y+3,W,22,'#8b94a8'); R(g,X+2,Y+5,W-4,18,'#f6f8fa'); R(g,X+5,Y+8,12,1,'#3b6fd1'); R(g,X+5,Y+11,18,1,'#3b6fd1'); R(g,X+5,Y+14,9,1,'#e0674f');
+    R(g,X+W-16,Y+8,10,10,'#ffe3a0'); if(p.text) drawText(g,p.text,X+5,Y+17,'#20243a'); },
+  poster(g,X,Y,w,h,p){ const W=w*T; R(g,X+3,Y+4,W-6,18,OLX); R(g,X+4,Y+5,W-8,16,p.c||'#e0674f'); if(p.text) drawText(g,p.text,X+W/2-textW(p.text)/2,Y+11,p.fc||'#fff6e2'); },
+  banner(g,X,Y,w,h,p){ const W=w*T; R(g,X+2,Y+3,W-4,14,OLX); R(g,X+3,Y+4,W-6,12,p.c||'#3b6fd1'); R(g,X+3,Y+16,W-6,2,shade(p.c||'#3b6fd1',-40)); drawText(g,p.text||'',X+W/2-textW(p.text||'')/2,Y+8,p.fc||'#fff6e2'); },
+  screen(g,X,Y,w,h,p){ const W=w*T; R(g,X+1,Y+3,W-2,22,OLX); R(g,X+2,Y+4,W-4,20,'#14223a'); if(p.text) drawText(g,p.text,X+5,Y+6,'#7fd3ff'); },
+  fakedoor(g,X,Y,w,h,p){ R(g,X+4,Y+6,24,26,OLX); R(g,X+5,Y+7,22,25,'#8a6a4a'); R(g,X+6,Y+8,9,22,'#9c7a56'); R(g,X+17,Y+8,9,22,'#9c7a56'); R(g,X+23,Y+19,2,2,'#f4b740'); if(p.text){ R(g,X+16-textW(p.text)/2-2,Y,textW(p.text)+4,7,OLX); drawText(g,p.text,X+16-textW(p.text)/2,Y+1,'#f4b740'); } }
+};
+/* animated wall screens drawn each frame */
+function drawScreenAnim(g,X,Y,w,p,t){ const W=w*T; const n=Math.floor((W-10)/5);
+  for(let i=0;i<n;i++){ const v=0.3+0.6*Math.abs(Math.sin(t*0.8+i*0.9+(p.seed||0)));
+    const hh=Math.round(v*11); R(g,X+5+i*5,Y+21-hh,3,hh, p.mode==='ticker' ? (Math.sin(t+i)>0?'#4cc7ad':'#ef7470') : ['#4cc7ad','#7fd3ff','#f4b740'][i%3]); } }
+
+/* ===================== tiles ===================== */
+function drawGrass(g,x,y){ const X=x*T,Y=y*T; R(g,X,Y,T,T,'#6aa84f');
+  for(let i=0;i<5;i++){ const a=hash(x*5+i,y*3), b=hash(y*7+i,x*2); R(g,X+Math.floor(a*15),Y+Math.floor(b*15),1,2,i%2?'#5a9643':'#7fbe5f'); } }
+function drawPath(g,x,y,isP){ const X=x*T,Y=y*T; R(g,X,Y,T,T,'#d9b98b');
+  for(let i=0;i<4;i++){ const a=hash(x*3+i,y*9), b=hash(y*5+i,x*7); R(g,X+Math.floor(a*14),Y+Math.floor(b*14),2,1,'#c49f70'); }
+  ['n','s','e','w'].forEach(d=>{ const nx=x+(d==='e')-(d==='w'), ny=y+(d==='s')-(d==='n'); if(!isP(nx,ny)){ if(d==='n') R(g,X,Y,T,1,'#b8956a'); if(d==='s') R(g,X,Y+T-1,T,1,'#b8956a'); if(d==='w') R(g,X,Y,1,T,'#b8956a'); if(d==='e') R(g,X+T-1,Y,1,T,'#b8956a'); } }); }
+function drawStone(g,x,y){ const X=x*T,Y=y*T; for(let i=0;i<2;i++)for(let k=0;k<2;k++){ R(g,X+k*8,Y+i*8,8,8,'#a39a8d'); R(g,X+k*8,Y+i*8,7,7,((x*2+k+y*2+i)%2)?'#d4cbbb':'#c6bcab'); } }
+function drawWater(g,x,y){ const X=x*T,Y=y*T; R(g,X,Y,T,T,'#3f86c4'); R(g,X+2+Math.floor(hash(x,y)*8),Y+4,5,1,'#6aa8de'); R(g,X+Math.floor(hash(y,x)*10),Y+11,4,1,'#6aa8de'); }
+const FLOORS = {
+  wood:(g,X,Y,x,y)=>{ R(g,X,Y,T,T,'#b9875a'); for(let r=0;r<4;r++){ R(g,X,Y+r*4+3,T,1,'#9a6c45'); R(g,X+((x*7+r*5+y*3)%4)*4+2,Y+r*4,1,3,'#9a6c45'); } },
+  checker:(g,X,Y,x,y)=>{ for(let i=0;i<2;i++)for(let k=0;k<2;k++) R(g,X+k*8,Y+i*8,8,8,((x*2+k+y*2+i)%2)?'#e8dfcf':'#c9bfac'); },
+  carpet:(g,X,Y,x,y,c)=>{ R(g,X,Y,T,T,c); for(let i=0;i<3;i++) R(g,X+Math.floor(hash(x+i,y)*15),Y+Math.floor(hash(y+i,x)*15),1,1,shade(c,14)); },
+  concrete:(g,X,Y,x,y)=>{ R(g,X,Y,T,T,'#8e8f98'); R(g,X,Y,T,1,'#7b7c86'); R(g,X,Y,1,T,'#7b7c86'); for(let i=0;i<3;i++) R(g,X+Math.floor(hash(x*3+i,y)*14),Y+Math.floor(hash(y*3+i,x)*14),2,1,'#9d9ea7'); },
+  lab:(g,X,Y)=>{ R(g,X,Y,T,T,'#e3eaee'); R(g,X,Y,T,1,'#c3cfd6'); R(g,X,Y,1,T,'#c3cfd6'); },
+  metal:(g,X,Y,x,y)=>{ R(g,X,Y,T,T,'#3d4560'); R(g,X+1,Y+1,T-2,T-2,'#454e6c'); R(g,X+2,Y+2,1,1,'#6b7488'); R(g,X+13,Y+13,1,1,'#6b7488'); R(g,X+2,Y+13,1,1,'#6b7488'); R(g,X+13,Y+2,1,1,'#6b7488'); }
+};
+
+/* ===================== town ===================== */
+const TOWN_B = [
+  {id:'iit', x:2,y:2,w:10,h:7, door:6, style:'iit', label:'IIT DELHI'},
+  {id:'future', x:14,y:1,w:8,h:6, door:17, style:'future', label:'FUTURE LAB'},
+  {id:'startup', x:25,y:3,w:8,h:6, door:28, style:'garage', label:'STARTUP GARAGE'},
+  {id:'vc', x:1,y:18,w:8,h:6, door:4, style:'glass', label:'VENTURE CAPITAL'},
+  {id:'research', x:14,y:18,w:8,h:6, door:17, style:'research', label:'RESEARCH LAB'},
+  {id:'consult', x:27,y:18,w:8,h:6, door:30, style:'office', label:'CONSULTING'}
+];
+const bDone = id => BUILDINGS[id].rooms.length && BUILDINGS[id].rooms.every(r=>S.q[r]&&S.q[r].done);
+function drawBuilding(g,b){ const W=b.w*T, H=b.h*T, ox=4, oy=24; const st=b.style;
+  const P={iit:{wall:'#a5523b',wd:'#7c3a29',roof:'#4b5a7a',rd:'#36415c',trim:'#efe2c4',door:'#5a3420'},
+    future:{wall:'#3a2f6b',wd:'#271f4d',roof:'#5a49a8',rd:'#3f3282',trim:'#7fe3ff',door:'#1a1636'},
+    garage:{wall:'#3f8f8a',wd:'#2c6b67',roof:'#2b3440',rd:'#1d242d',trim:'#f4b740',door:'#c8ccd8'},
+    glass:{wall:'#2c4f7c',wd:'#1d3a5e',roof:'#1e2a3c',rd:'#141c29',trim:'#cfe3ff',door:'#14223a'},
+    research:{wall:'#e8ecef',wd:'#c4ccd2',roof:'#3f9a7a',rd:'#2d7a5f',trim:'#3f9a7a',door:'#5c7a8a'},
+    office:{wall:'#d8d6d0',wd:'#b0aea6',roof:'#3a3e4e',rd:'#2a2d3a',trim:'#e0674f',door:'#2c3e57'}}[st];
+  const roofH = Math.round(H*(st==='glass'?0.18:0.42));
+  // body
+  R(g,ox-1,oy+roofH-1,W+2,H-roofH+1,OLX); R(g,ox,oy+roofH,W,H-roofH,P.wall); R(g,ox,oy+H-3,W,3,P.wd);
+  if(st==='iit'){ for(let yy=oy+roofH+2; yy<oy+H-3; yy+=4) for(let xx=ox+((yy/4)%2?0:4); xx<ox+W; xx+=8) R(g,xx,yy,7,1,'#b8644b'); }
+  if(st==='garage'){ for(let xx=ox+2; xx<ox+W; xx+=4) R(g,xx,oy+roofH,1,H-roofH-3,P.wd); }
+  if(st==='glass'){ R(g,ox,oy-14,W,roofH+14,OLX); R(g,ox+1,oy-13,W-2,roofH+12,P.roof); for(let yy=oy+roofH+2; yy<oy+H-6; yy+=9) for(let xx=ox+3; xx<ox+W-4; xx+=9){ R(g,xx,yy,7,7,'#5f8fc9'); R(g,xx,yy,3,3,'#9cc4f0'); } }
+  // windows
+  const dX=ox+(b.door-b.x)*T, dW=2*T, dY=oy+H-24;
+  if(st!=='glass'){ const wy=oy+roofH+5; for(let xx=ox+6; xx<ox+W-14; xx+=20){ if(xx+12>dX-6 && xx<dX+dW+6) continue;
+      R(g,xx-1,wy-1,14,13,OLX); R(g,xx,wy,12,11,st==='future'?'#7fe3ff':st==='research'?'#9fd6e8':'#9fd0ff'); R(g,xx,wy,12,3,'#d8eeff'); R(g,xx+5,wy,1,11,OLX); R(g,xx,wy+10,12,2,P.trim); } }
+  // door
+  if(st==='garage'){ R(g,dX-2,dY-2,dW+4,26,OLX); R(g,dX,dY,dW,24,P.door); for(let yy=dY+2;yy<dY+24;yy+=3) R(g,dX,yy,dW,1,'#8b94a8'); }
+  else { R(g,dX-2,dY-2,dW+4,26,OLX); R(g,dX,dY,dW,24,P.trim); R(g,dX+2,dY+2,dW-4,22,P.door); R(g,dX+T-1,dY+2,2,22,OLX); R(g,dX+T-5,dY+12,2,2,'#f4b740'); R(g,dX+T+3,dY+12,2,2,'#f4b740'); }
+  if(st==='future'){ const open=futureOpen(); if(!open){ for(let i=0;i<6;i++) R(g,dX+2+i*5,dY,2,24,'#8b94a8'); R(g,dX,dY+10,dW,2,'#8b94a8'); } else { R(g,dX+2,dY+2,dW-4,22,'#7fe3ff'); R(g,dX+6,dY+6,dW-12,14,'#c8f6ff'); }
+    R(g,dX+dW+5,dY+2,4,4,OLX); R(g,dX+dW+6,dY+3,2,2,open?'#4cc7ad':'#ef7470'); }
+  if(st==='iit'){ [dX-10,dX+dW+5].forEach(cx=>{ R(g,cx,oy+roofH,5,H-roofH-3,OLX); R(g,cx+1,oy+roofH,3,H-roofH-3,'#efe2c4'); }); }
+  // sign
+  const tw=textW(b.label), sx=ox+W/2-Math.ceil(tw/2), sy=dY-12; R(g,sx-4,sy-3,tw+8,11,OLX); R(g,sx-3,sy-2,tw+6,9,st==='garage'?'#20243a':P.trim==='#efe2c4'?'#efe2c4':'#20243a');
+  drawText(g,b.label,sx,sy,st==='garage'?'#f4b740':st==='iit'?'#7c3a29':'#f5ead2');
+  if(bDone(b.id)){ drawIcon(g,'star',sx+tw+8,sy-2,'#f4b740'); }
+  // roof
+  if(st==='iit'||st==='office'){ R(g,ox-4,oy-1,W+8,roofH+2,OLX); R(g,ox-3,oy,W+6,roofH,P.roof); for(let yy=oy+3; yy<oy+roofH; yy+=4) R(g,ox-3,yy,W+6,1,P.rd); R(g,ox-3,oy,W+6,2,shade(P.roof,25)); R(g,ox-3,oy+roofH-2,W+6,2,P.rd);
+    if(st==='iit'){ const cx=ox+W/2; R(g,cx-7,oy-10,14,14,OLX); R(g,cx-6,oy-9,12,12,'#efe2c4'); R(g,cx-1,oy-7,1,5,OLX); R(g,cx,oy-3,4,1,OLX); }
+    if(st==='office'){ R(g,ox+8,oy-6,10,6,OLX); R(g,ox+9,oy-5,8,5,'#8b94a8'); } }
+  if(st==='garage'){ R(g,ox-4,oy+roofH-6,W+8,8,OLX); R(g,ox-3,oy+roofH-5,W+6,6,P.roof); R(g,ox,oy,W,roofH-5,OLX); R(g,ox+1,oy+1,W-2,roofH-6,'#2c6b67'); for(let xx=ox+3;xx<ox+W-2;xx+=4) R(g,xx,oy+1,1,roofH-6,'#245955');
+    const nt='OPEN 24/7', nw=textW(nt); R(g,ox+W/2-nw/2-3,oy+6,nw+6,9,OLX); drawText(g,nt,ox+W/2-nw/2,oy+8,'#ff6fa8'); }
+  if(st==='research'||st==='future'){ R(g,ox-3,oy+roofH-6,W+6,8,OLX); R(g,ox-2,oy+roofH-5,W+4,6,P.rd); const cx=ox+W/2, r=st==='future'?22:20;
+    for(let yy=-r; yy<=0; yy++){ const ww=Math.round(Math.sqrt(r*r-yy*yy)); R(g,cx-ww-1,oy+roofH-5+yy,ww*2+2,1,OLX); R(g,cx-ww,oy+roofH-5+yy,ww*2,1, yy<-r*0.6?shade(P.roof,30):P.roof); }
+    if(st==='research'){ R(g,cx-2,oy+roofH-24,4,20,'#20243a'); R(g,cx-1,oy+roofH-28,2,4,'#c8ccd8'); }
+    if(st==='future'){ R(g,cx-1,oy+roofH-34,2,10,'#c8ccd8'); R(g,cx-3,oy+roofH-37,6,4,'#7fe3ff'); for(let i=-2;i<=2;i++) R(g,cx+i*7-2,oy+roofH-14+Math.abs(i)*3,4,3,'#7fe3ff'); } }
+}
+
+function buildTown(){
+  const W=36,H=30; const tile=new Array(W*H).fill('g'); const solid=new Uint8Array(W*H);
+  const set=(x0,y0,x1,y1,v)=>{ for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++) tile[y*W+x]=v; };
+  set(2,10,33,11,'p'); set(10,12,25,17,'s'); set(6,9,7,9,'p'); set(17,7,18,9,'p'); set(28,9,29,9,'p');
+  set(10,18,11,23,'p'); set(24,18,25,23,'p'); set(2,24,33,25,'p'); set(28,13,32,16,'w');
+  const isP=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&(tile[y*W+x]==='p'||tile[y*W+x]==='s');
+  const occ=new Uint8Array(W*H); // reserved cells
+  TOWN_B.forEach(b=>{ for(let y=b.y;y<b.y+b.h;y++) for(let x=b.x;x<b.x+b.w;x++){ solid[y*W+x]=1; occ[y*W+x]=1; }
+    const dy=b.y+b.h-1; if(b.id!=='future'||futureOpen()){ solid[dy*W+b.door]=0; solid[dy*W+b.door+1]=0; } });
+  for(let i=0;i<W*H;i++) if(tile[i]==='w') solid[i]=1;
+  const props=[], npcs=[], zones=[];
+  const add=(p)=>{ props.push(p); if(p.solid!==false) for(let y=p.y;y<p.y+(p.h||1);y++) for(let x=p.x;x<p.x+(p.w||1);x++) solid[y*W+x]=1; for(let y=p.y-1;y<=p.y+(p.h||1);y++) for(let x=p.x-1;x<=p.x+(p.w||1);x++) if(x>=0&&y>=0&&x<W&&y<H) occ[y*W+x]=1; };
+  add({t:'fountain',x:17,y:14,w:2,h:2,act:()=>sayLines('Fountain',[ 'A sign reads: "Toss a coin, make a wish." Someone has tossed in a sticky note that says "more hours in the day".'],null,'fun'),label:'Look'});
+  add({t:'bench',x:11,y:13,w:2}); add({t:'bench',x:23,y:13,w:2});
+  [[12,12],[23,12],[12,17],[23,17]].forEach(([x,y])=>add({t:'lamp',x,y}));
+  add({t:'board',x:13,y:12,w:2,label:'Read notice board',act:noticeBoard});
+  add({t:'sign',x:21,y:12,text:'AVIN TOWN',label:'Read sign',act:()=>sayLines('Town Sign',['North: Future Lab (locked until 4 rooms are done). Northwest: IIT Delhi. Northeast: Startup Garage.','South side: Venture Capital, Research Lab and the Consulting Office. Press M any time to fast-travel.'])});
+  npcs.push({id:'guide',x:15,y:16,dir:'right',look:LOOKS.guide,name:'Tara, Town Guide',talk:talkGuide});
+  npcs.push({id:'recruiter',x:22,y:15,dir:'left',look:LOOKS.recruiter,name:'Visiting Recruiter',talk:()=>sayLines('Visiting Recruiter',[
+    'So a Textile Technology student ends up in consulting, venture capital, startups AND research?',
+    'My theory: textiles is about turning raw material into something useful through a lot of process. Seems he applied that to everything else too.',
+    "Anyway, I'm here for the Future Lab. I hear it opens once you've seen four rooms."],LOOKS.recruiter,'fun')});
+  npcs.push({id:'locke',x:20,y:7,dir:'down',look:LOOKS.robot,name:'LOCK-E',talk:()=>{ const n=doneCount();
+    sayLines('LOCK-E', futureOpen()? ['Access granted. Avin is waiting inside the Future Lab.'] : [`Beep. The Future Lab is locked.`,`Complete any ${UNLOCK_AT} rooms to open it. Progress: ${n}/${UNLOCK_AT}.`],LOOKS.robot); }});
+  npcs.forEach(n=>{ for(let y=n.y-1;y<=n.y+1;y++) for(let x=n.x-1;x<=n.x+1;x++) occ[y*W+x]=1; });
+  // trees
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const i=y*W+x; if(tile[i]!=='g'||occ[i]) continue;
+    const border = y===0||x===0||x===W-1||y>=H-3; let near=false; for(let yy=y-1;yy<=y+1;yy++) for(let xx=x-1;xx<=x+1;xx++) if(isP(xx,yy)||(xx>=0&&yy>=0&&xx<W&&yy<H&&tile[yy*W+xx]==='w')) near=true;
+    if(border || (!near && hash(x,y)<0.16)){ props.push({t:'tree',x,y,v:Math.floor(hash(y,x)*3)}); solid[i]=1; occ[i]=1; }
+    else if(!near && hash(x+9,y+3)<0.08){ props.push({t:'bush',x,y}); solid[i]=1; occ[i]=1; } }
+  npcs.forEach(n=>solid[n.y*W+n.x]=1);
+  TOWN_B.forEach(b=>{ const dy=b.y+b.h-1; const B=BUILDINGS[b.id];
+    if(b.id==='future' && !futureOpen()) return;
+    const L = b.id==='future'? SCENE_DEFS.future() : LOBBIES[B.lobby];
+    zones.push({x:b.door*T,y:dy*T,w:2*T,h:T,label:'Enter '+B.name, go:{scene:B.lobby, x:(L.exitX+1)*T, y:(L.h-2)*T+12, dir:'up'}}); });
+  // static layer
+  const c=document.createElement('canvas'); c.width=W*T; c.height=H*T; const g=c.getContext('2d');
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const v=tile[y*W+x]; if(v==='p') drawPath(g,x,y,isP); else if(v==='s') drawStone(g,x,y); else if(v==='w') drawWater(g,x,y); else drawGrass(g,x,y); }
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){ if(tile[y*W+x]==='g' && !occ[y*W+x] && !solid[y*W+x] && hash(x*3,y*5)<0.12){ const X=x*T,Y=y*T; [[3,5],[10,9],[6,12]].forEach(([a,b2],i)=>{ R(g,X+a,Y+b2,2,2,['#f2e86a','#ef7470','#fff6e2'][(x+y+i)%3]); R(g,X+a,Y+b2+2,1,2,'#3f8a45'); }); } }
+  // pond edge
+  for(let y=13;y<=16;y++){ R(g,28*T-2,y*T,2,T,'#5a9643'); R(g,33*T,y*T,2,T,'#5a9643'); } R(g,28*T,13*T-2,5*T,2,'#5a9643'); R(g,28*T,17*T,5*T,2,'#5a9643');
+  return {id:'town',name:'Avin Town',kind:'town',W,H,ground:c,solid,props,npcs,zones,bg:'#2f6a35',buildings:TOWN_B};
+}
+function noticeBoard(){ sayLines('Notice Board',[
+  'SIDE QUESTS (fictional, obviously):',
+  '1. Find a free slot in Avin’s calendar. Difficulty: legendary.',
+  '2. Ask the coffee machine in the Consulting Office if it works weekends.',
+  '3. Explain "Textile Technology" to a VC in under ten seconds.'],null,'fun'); }
+
+/* ===================== interiors ===================== */
+const LOBBIES = {
+  lobby_iit:{b:'iit',w:26,h:9,exitX:12,doors:{academics:2,bnc:6,placement:10,arena:14,classroom:18,community:22}},
+  lobby_startup:{b:'startup',w:16,h:9,exitX:7,doors:{glexica:2,wootz:12}},
+  lobby_vc:{b:'vc',w:14,h:9,exitX:6,doors:{campus:2,mounttech:10}},
+  lobby_consult:{b:'consult',w:14,h:9,exitX:6,doors:{kepler:6}},
+  lobby_research:{b:'research',w:8,h:11,exitX:3,doors:{haas:3}}
+};
+const ROOM_W=14, ROOM_H=10, ROOM_EXIT=6;
+function lobbyOf(qid){ return BUILDINGS[QUESTS[qid].b].lobby; }
+
+const SCENE_DEFS = {
+  lobby_iit:()=>({name:'IIT Delhi — Main Hallway', floor:'checker', wall:'#a5523b', wallTrim:'#efe2c4',
+    walls:[{t:'banner',x:12,w:2,text:'IITD',c:'#7c3a29'},{t:'poster',x:4,w:2,text:'FEST',c:'#3b6fd1'},{t:'window',x:8,w:2},{t:'window',x:16,w:2},{t:'poster',x:20,w:2,text:'TEST',c:'#e1a23a',fc:'#20243a'}],
+    props:[{t:'plant',x:1,y:7},{t:'plant',x:24,y:7},{t:'bench',x:4,y:6,w:2},{t:'bench',x:19,y:6,w:2},{t:'cooler',x:24,y:3,label:'Water cooler',act:()=>sayLines('Water Cooler',['Free water. The most reliable resource on any campus.'],null,'fun')}],
+    npcs:[{x:9,y:5,dir:'down',look:LOOKS.student2,name:'Hallway Student',talk:()=>sayLines('Hallway Student',['Six rooms, one hallway. Avin did all of these alongside classes.','I just did classes. And I’m tired.'],LOOKS.student2,'fun')}]}),
+  lobby_startup:()=>({name:'Startup Garage', floor:'concrete', wall:'#3f8f8a', wallTrim:'#f4b740',
+    locked:[{x:7,text:'FUTURE IDEA'}],
+    walls:[{t:'whiteboard',x:4,w:3,text:'MVP?'},{t:'poster',x:10,w:2,text:'SHIP',c:'#ff6fa8'}],
+    props:[{t:'beanbag',x:2,y:6,c:'#e1a23a',solid:true},{t:'beanbag',x:4,y:6,c:'#3b6fd1',solid:true},{t:'pingpong',x:10,y:5,w:3,h:2},{t:'vending',x:14,y:3,label:'Vending machine',act:()=>sayLines('Vending Machine',['It only sells instant noodles and energy drinks. Classic startup fuel.'],null,'fun')},{t:'plant',x:1,y:2}],
+    npcs:[{x:5,y:3,dir:'down',look:LOOKS.manager2,name:'Garage Manager',talk:()=>sayLines('Garage Manager',['Two rooms in here. Glexica’s product lab on the left, Wootz Work’s RFQ factory on the right.','The door in the middle? Not ready yet. Ask again in a few years.'],LOOKS.manager2)}]}),
+  lobby_vc:()=>({name:'Venture Capital — Lobby', floor:'carpet', fc:'#2f3f5e', wall:'#2c4f7c', wallTrim:'#cfe3ff',
+    walls:[{t:'screen',x:5,w:4,text:'MARKETS',anim:'ticker'},{t:'poster',x:12,w:1,c:'#f4b740'}],
+    props:[{t:'sofa',x:5,y:4,w:3,c:'#6a4b8a'},{t:'plant',x:1,y:7},{t:'plant',x:12,y:7},{t:'table',x:5,y:6,w:3,h:1,c:'#c8ccd8'}],
+    npcs:[{x:9,y:6,dir:'left',look:LOOKS.partner,name:'Fund Associate',talk:()=>sayLines('Fund Associate',['Campus Fund on the left, MountTech Growth Fund on the right.','Different funds, same question: is this startup worth backing, and what could go wrong?'],LOOKS.partner)}]}),
+  lobby_consult:()=>({name:'Consulting Office — Reception', floor:'carpet', fc:'#5a5d6e', wall:'#d8d6d0', wallTrim:'#e0674f',
+    walls:[{t:'window',x:2,w:2},{t:'window',x:10,w:2}],
+    props:[{t:'counter',x:3,y:3,w:3,text:'HELLO'},{t:'coffee',x:1,y:6,label:'Use coffee machine',act:()=>{ Snd.get(); sayLines('Coffee Machine',['*whirr*  You gained +10 Energy.','It changes nothing in the game. You feel more productive anyway.'],null,'fun'); }},
+      {t:'bookshelf',x:11,y:2,w:2,unfinished:true,label:'Browse bookshelf',act:()=>sayLines('Bookshelf',['A whole shelf of case studies, each one started and never finished.','"Market sizing for..." it just stops there.'],null,'fun')},{t:'sofa',x:9,y:6,w:3,c:'#2c3e57'},{t:'plant',x:12,y:5}],
+    npcs:[{x:4,y:5,dir:'down',look:LOOKS.recep,name:'Receptionist',talk:()=>sayLines('Receptionist',['Welcome! Kepler Cannon’s analytics office is straight ahead.','Coffee machine is to your left. Priorities.'],LOOKS.recep)}]}),
+  lobby_research:()=>({name:'Research Lab — Corridor', floor:'lab', wall:'#cfe6dc', wallTrim:'#3f9a7a',
+    walls:[{t:'poster',x:1,w:2,text:'DATA',c:'#3f9a7a'},{t:'poster',x:5,w:2,text:'SURVEY',c:'#3b6fd1'}],
+    props:[{t:'cabinet',x:1,y:4},{t:'cabinet',x:6,y:4,c:'#9fb0a8'},{t:'plant',x:1,y:9},{t:'plant',x:6,y:9}],
+    npcs:[{x:2,y:7,dir:'right',look:LOOKS.researcher,name:'Research Assistant',talk:()=>sayLines('Research Assistant',['The Berkeley Haas lab is at the end of the corridor.','Quiet please. Someone in there is cleaning survey data. It is a sacred process.'],LOOKS.researcher,'fun')}]}),
+
+  academics:()=>({floor:'wood', wall:'#5b7a5e', wallTrim:'#d9c48a',
+    walls:[{t:'chalkboard',x:5,w:4},{t:'window',x:1,w:2},{t:'window',x:11,w:2}],
+    props:[{t:'bookshelf',x:1,y:2,w:2},{t:'bookshelf',x:3,y:2,w:2},{t:'bookshelf',x:9,y:2,w:2},{t:'bookshelf',x:11,y:2,w:2},
+      {t:'desk',x:2,y:5,w:2,on:'books'},{t:'desk',x:10,y:5,w:2,on:'papers'},{t:'table',x:5,y:6,w:4,h:1},{t:'plant',x:1,y:8},{t:'plant',x:12,y:8},
+      {t:'item',x:3,y:5,icon:'book',c:'#3b6fd1',lift:6,flag:'ac_book',solid:false,label:'Pick up textbook',act:()=>acItem('ac_book','Textile Technology Textbook','Fibres, yarns, fabrics, processes. The day job. B.Tech at IIT Delhi, July 2023 to May 2027.')},
+      {t:'item',x:10,y:5,icon:'doc',c:'#4cc7ad',lift:6,flag:'ac_grant',solid:false,label:'Pick up letter',act:()=>acItem('ac_grant','Research Award Letter','Summer Undergraduate Research Award. A grant from IRD, IIT Delhi, for a research idea Avin pitched.')},
+      {t:'item',x:6,y:6,icon:'doc',c:'#e0674f',lift:4,flag:'ac_paper',solid:false,label:'Pick up newspaper',act:()=>acItem('ac_paper','Business Newspaper','Open to the startup funding page, with notes in the margin. The curiosity that led to everything else in this town.')}],
+    npcs:[{x:8,y:3,dir:'down',look:LOOKS.prof,name:'Prof. Warp',talk:()=>{ qs('academics').started=true; sayLines('Prof. Warp',
+      objDone('academics','items')?['You found them all. Curious kid, that one.']:['Ah, a visitor! I teach Textile Technology. Warp and weft, all day long.','Avin is one of ours. Very curious. Kept wandering off into business, research and startups.','There are three things on these desks that sum him up. Go find them.'],LOOKS.prof); }}]}),
+  bnc:()=>({floor:'carpet', fc:'#2f3f6e', wall:'#3f8f8a', wallTrim:'#e0884f',
+    walls:[{t:'whiteboard',x:1,w:3,text:'PIPELINE'},{t:'banner',x:9,w:4,text:'BNC CLUB',c:'#e0884f'},{t:'window',x:5,w:2}],
+    props:[{t:'table',x:4,y:4,w:6,h:2,c:'#c8a676',on:'cups'},{t:'chair',x:4,y:3,solid:false},{t:'chair',x:6,y:3,solid:false},{t:'chair',x:8,y:3,solid:false},{t:'chair',x:5,y:6,solid:false},{t:'chair',x:8,y:6,solid:false},
+      {t:'easel',x:1,y:3,text:'TEAM'},{t:'desk',x:10,y:2,w:2,on:'laptop'},{t:'plant',x:12,y:8},{t:'plant',x:1,y:8},
+      {t:'item',x:6,y:5,icon:'doc',c:'#3b6fd1',lift:4,flag:'bnc_brief',solid:false,label:'Take client brief',act:()=>bncDoc('bnc_brief','Client Brief','Chai & Charts wants help pricing their analytics subscription. Fictional startup, real kind of problem.')},
+      {t:'item',x:1,y:3,icon:'doc',c:'#4cc7ad',lift:6,flag:'bnc_roster',solid:false,label:'Take team roster',act:()=>bncDoc('bnc_roster','Team Roster','Five student consultants, one project manager, zero free weekends.')},
+      {t:'item',x:11,y:2,icon:'doc',c:'#e0884f',lift:6,flag:'bnc_plan',solid:false,label:'Take project plan',act:()=>bncDoc('bnc_plan','Project Plan','Week 1: research. Week 2: interviews. Week 3: model. Week 4: present. Week 5: sleep.')}],
+    npcs:[{x:2,y:7,dir:'right',look:LOOKS.lead,name:'Project Lead',talk:talkBncLead},
+      {x:11,y:6,dir:'left',look:LOOKS.founder,name:'Startup Founder',talk:()=>sayLines('Startup Founder',['Hi! I run Chai & Charts, a tiny analytics startup. Totally made up for this game.','The club’s startup projects team is going to help us with pricing. Can you get the paperwork to the project lead?'],LOOKS.founder,'fic')}]}),
+  placement:()=>({floor:'checker', wall:'#d9cbb0', wallTrim:'#58b368',
+    walls:[{t:'fakedoor',x:1,w:2,text:'ROOM A'},{t:'screen',x:5,w:4,text:'SCHEDULE',anim:'bars'},{t:'fakedoor',x:11,w:2,text:'ROOM B'}],
+    props:[{t:'desk',x:5,y:3,w:3,on:'pc'},{t:'chair',x:1,y:6,c:'#58b368',solid:true},{t:'chair',x:2,y:6,c:'#58b368',solid:true},{t:'chair',x:11,y:6,c:'#58b368',solid:true},{t:'plant',x:12,y:8},{t:'cooler',x:9,y:2}],
+    npcs:[{x:6,y:5,dir:'down',look:LOOKS.coord,name:'Placement Coordinator',talk:talkPlacement},
+      {x:12,y:4,dir:'left',look:LOOKS.candidate,name:'Nervous Candidate',talk:()=>sayLines('Nervous Candidate',['Is this the queue for Quantloom or Bluebirch? I applied to both.','Please don’t tell either of them.'],LOOKS.candidate,'fun')}]}),
+  arena:()=>({floor:'carpet', fc:'#3c2a5e', wall:'#241f3d', wallTrim:'#f4b740',
+    walls:[{t:'screen',x:4,w:6,text:'LEADERBOARD',anim:'bars'},{t:'banner',x:1,w:2,text:'WIN',c:'#a14fd1'},{t:'banner',x:11,w:2,text:'GG',c:'#a14fd1'}],
+    props:[{t:'rug',x:2,y:6,w:10,h:2,c:'#5a3a8a',c2:'#3c2a5e',solid:false,flat:true},
+      {t:'trophy',x:2,y:4,c:'#f4b740',flag:'tr_ai',label:'Inspect trophy',act:()=>trophy('tr_ai','AIdeate Trophy','Winner, AIdeate by GPAI Turing Korea. Placed in the top 3% of a global AI-based case competition.')},
+      {t:'trophy',x:5,y:4,c:'#c8ccd8',flag:'tr_8f',label:'Inspect trophy',act:()=>trophy('tr_8f','Eightfold.ai Hackathon Trophy','Winner, Eightfold.ai Hackathon at IIT Kanpur, for building a High-Trust Talent Intelligence platform.')},
+      {t:'trophy',x:8,y:4,c:'#e0884f',flag:'tr_fycf',label:'Inspect trophy',act:()=>trophy('tr_fycf','FYCF Trophy','Winner, FYCF Contest at BECon’25 by eDC IIT Delhi, for startup and business pitch ideas.')},
+      {t:'trophy',x:11,y:4,c:'#7fd3ff',flag:'tr_inter',label:'Inspect trophy',act:()=>trophy('tr_inter','Inter IIT Tech 14.0','Top 6. Part of the IIT Delhi contingent that finished 6th among 23+ IITs.')}],
+    npcs:[{x:10,y:7,dir:'left',look:LOOKS.announcer,name:'Arena Announcer',talk:()=>{ qs('arena').started=true; sayLines('Arena Announcer',['Welcome to the Arena! Every trophy here has a story.','Check out at least three of them. The leaderboard is watching.'],LOOKS.announcer); }}]}),
+  classroom:()=>({floor:'wood', wall:'#e6dcc4', wallTrim:'#cf5d7a',
+    walls:[{t:'chalkboard',x:4,w:6},{t:'window',x:1,w:2},{t:'poster',x:11,w:2,text:'RULES',c:'#cf5d7a'}],
+    props:[{t:'desk',x:6,y:3,w:2,on:'papers'},{t:'desk',x:2,y:5,w:2},{t:'desk',x:9,y:5,w:2},{t:'desk',x:2,y:7,w:2},{t:'desk',x:9,y:7,w:2},{t:'plant',x:12,y:2}],
+    npcs:[{x:9,y:3,dir:'down',look:LOOKS.faculty,name:'Faculty Advisor',talk:talkFaculty},
+      {x:2,y:6,dir:'right',look:LOOKS.student,name:'Student',talk:()=>{ const got=progress('classroom','feedback','cl_s1'); sayLines('Student',['The grading cutoffs this semester feel brutal. A lot of us are one grade away from failing.', got?'(Feedback noted.)':'(You already have this feedback.)'],LOOKS.student,'fic'); }},
+      {x:11,y:6,dir:'left',look:LOOKS.student2,name:'Student',talk:()=>{ const got=progress('classroom','feedback','cl_s2'); sayLines('Student',['Can someone take this to the faculty? Someone like... the class rep?', got?'(Feedback noted.)':'(You already have this feedback.)'],LOOKS.student2,'fic'); }}]}),
+  community:()=>({floor:'wood', wall:'#f0c98a', wallTrim:'#e86a8e',
+    walls:[{t:'chalkboard',x:2,w:3},{t:'poster',x:8,w:3,text:'THANK YOU',c:'#e86a8e'},{t:'window',x:11,w:2}],
+    props:[{t:'rug',x:3,y:3,w:8,h:3,c:'#e8a23a',c2:'#c47a2a',solid:false,flat:true},{t:'table',x:1,y:6,w:2,h:1},{t:'table',x:11,y:6,w:2,h:1},{t:'plant',x:1,y:2},{t:'plant',x:12,y:2},{t:'chair',x:4,y:4,c:'#3fa37a',solid:false},{t:'chair',x:9,y:4,c:'#3b6fd1',solid:false},
+      {t:'item',x:1,y:6,icon:'book',c:'#e86a8e',lift:4,flag:'cm_bach',solid:false,label:'Read register',act:()=>{ if(progress('community','records','cm_bach')) sayLines('Bachpan Program Register',['Bachpan Program: Avin mentored 10+ underprivileged students, helping them understand academic concepts.'],null,'real'); }},
+      {t:'item',x:12,y:6,icon:'doc',c:'#3fa37a',lift:4,flag:'cm_uba',solid:false,label:'Read field notes',act:()=>{ if(progress('community','records','cm_uba')) sayLines('UBA Khurrampur Field Notes',['Unnat Bharat Abhiyan, Khurrampur: assessed 7+ rural sustainability issues to support community development.'],null,'real'); }}],
+    npcs:[{x:7,y:4,dir:'down',look:LOOKS.mentor,name:'Community Mentor',talk:()=>{ progress('community','mentor','cm_m'); sayLines('Community Mentor',['Not every chapter is about work.','Avin volunteered too, teaching kids and visiting villages. The records are on the two side tables.'],LOOKS.mentor); }}]}),
+  glexica:()=>({floor:'wood', wall:'#ecebf5', wallTrim:'#7b6cf0',
+    walls:[{t:'whiteboard',x:1,w:3,text:'FEATURES'},{t:'screen',x:8,w:4,text:'PROTOTYPE',anim:'bars'},{t:'window',x:5,w:2}],
+    props:[{t:'desk',x:6,y:3,w:2,on:'pc2',label:'Open landing page editor',act:()=>openGlexica()},{t:'desk',x:1,y:5,w:2,on:'pc'},{t:'desk',x:1,y:7,w:2,on:'laptop'},{t:'desk',x:10,y:5,w:2,on:'pc'},{t:'desk',x:10,y:7,w:2,on:'laptop'},{t:'plant',x:12,y:2},{t:'beanbag',x:4,y:7,c:'#7b6cf0',solid:true}],
+    npcs:[{x:8,y:6,dir:'left',look:LOOKS.techie,name:'Product Teammate',talk:()=>{ qs('glexica').started=true; sayLines('Product Teammate',objDone('glexica','page')?['Much better. Visitors actually understand what we do now.']:['We’re fixing a landing page. The product is fictional, the problems are very real.','The editor is on the big screen. Visitors should know what we do in three seconds.'],LOOKS.techie); }}]}),
+  wootz:()=>({floor:'concrete', wall:'#5c6170', wallTrim:'#f2b134',
+    walls:[{t:'banner',x:5,w:4,text:'RFQ DESK',c:'#f2b134',fc:'#20243a'},{t:'window',x:1,w:2},{t:'window',x:11,w:2}],
+    props:[{t:'machine',x:1,y:3,w:2,h:2},{t:'machine',x:11,y:3,w:2,h:2},{t:'desk',x:6,y:3,w:2,on:'pc',label:'Open RFQ dashboard',act:()=>openWootz()},{t:'table',x:4,y:6,w:2,h:1,on:'papers'},{t:'crate',x:1,y:7},{t:'crate',x:2,y:7},{t:'crate',x:1,y:8},{t:'rack',x:10,y:7,w:3}],
+    npcs:[{x:8,y:6,dir:'left',look:LOOKS.manager,name:'Factory Manager',talk:()=>{ qs('wootz').started=true; sayLines('Factory Manager',objDone('wootz','rfq')?['Good call. That’s the kind of quote we should chase.']:['Every day, buyers send us RFQs: requests for a price on parts they need made.','We can’t chase all of them. Check today’s pile on the dashboard and tell me which one is worth a closer look.','The data’s made up, by the way. Real numbers stay in the factory.'],LOOKS.manager); }}]}),
+  campus:()=>({floor:'carpet', fc:'#2c5a4a', wall:'#20304f', wallTrim:'#3fb58e',
+    walls:[{t:'screen',x:4,w:6,text:'PITCH DAY',anim:'bars'},{t:'window',x:1,w:2},{t:'window',x:11,w:2}],
+    props:[{t:'easel',x:2,y:3,text:'KISAN',chart:true},{t:'easel',x:5,y:3,text:'LOOP',chart:true},{t:'easel',x:8,y:3,text:'VOLT',chart:true},{t:'table',x:4,y:6,w:5,h:1,c:'#c8ccd8',on:'papers'},{t:'plant',x:12,y:8},{t:'plant',x:1,y:8}],
+    npcs:[{x:11,y:5,dir:'left',look:LOOKS.partner,name:'Fund Partner',talk:()=>{ qs('campus').started=true; if(objDone('campus','pick')) return sayLines('Fund Partner',['Good instincts. Now the real work starts: diligence.'],LOOKS.partner);
+      sayLines('Fund Partner',['Three founders pitched today. We only have time to dig into one.','Have a look and tell me which one deserves deeper diligence.'],LOOKS.partner,null,()=>openCampus()); }}]}),
+  mounttech:()=>({floor:'metal', wall:'#1d2742', wallTrim:'#8a7dd8',
+    walls:[{t:'banner',x:5,w:4,text:'DEEPTECH',c:'#8a7dd8'},{t:'screen',x:1,w:3,text:'RADAR',anim:'bars'},{t:'screen',x:10,w:3,text:'ORBIT',anim:'bars'}],
+    props:[{t:'cabinet',x:2,y:3,c:'#8a7dd8',label:'Open startup file',fileId:'sky',act:()=>openMount('sky')},{t:'cabinet',x:6,y:3,c:'#5aa7c9',label:'Open startup file',fileId:'orbit',act:()=>openMount('orbit')},{t:'cabinet',x:10,y:3,c:'#e0884f',label:'Open startup file',fileId:'shop',act:()=>openMount('shop')},
+      {t:'drone',x:3,y:6},{t:'satellite',x:11,y:6},{t:'arm',x:1,y:7},{t:'holo',x:12,y:8,c:'#8a7dd8'}],
+    npcs:[{x:8,y:6,dir:'left',look:LOOKS.analyst,name:'Senior Analyst',talk:()=>{ qs('mounttech').started=true; sayLines('Senior Analyst',['Deeptech is hard to commercialise, even when the tech works.','Open the three startup files on the cabinets and spot each one’s biggest risk. All three are fictional.'],LOOKS.analyst); }}]}),
+  kepler:()=>({floor:'carpet', fc:'#3a3f52', wall:'#2c3e57', wallTrim:'#e0674f',
+    walls:[{t:'screen',x:1,w:4,text:'REVENUE',anim:'bars'},{t:'screen',x:9,w:4,text:'MARGIN',anim:'bars'},{t:'window',x:6,w:2}],
+    props:[{t:'desk',x:6,y:3,w:2,on:'pc2',label:'Open dashboard',act:()=>openKepler()},{t:'desk',x:1,y:4,w:2,on:'pc'},{t:'desk',x:1,y:6,w:2,on:'laptop'},{t:'desk',x:11,y:4,w:2,on:'pc'},{t:'desk',x:11,y:6,w:2,on:'pc'},{t:'plant',x:12,y:8},{t:'plant',x:1,y:8}],
+    npcs:[{x:9,y:6,dir:'left',look:LOOKS.em,name:'Engagement Manager',talk:()=>{ qs('kepler').started=true; sayLines('Engagement Manager',objDone('kepler','leak')?['Nice catch. That’s the slide the SteerCo will remember.']:['Our client, a fictional bank, has more customers than last year but fees are flat.','Money is leaking somewhere. The dashboard is on the main screen. Find the segment that looks wrong.'],LOOKS.em); }}]}),
+  haas:()=>({floor:'lab', wall:'#cfe6dc', wallTrim:'#4fb0b5',
+    walls:[{t:'whiteboard',x:1,w:3,text:'SURVEY'},{t:'banner',x:8,w:4,text:'ENERGY',c:'#4fb0b5'},{t:'window',x:5,w:2}],
+    props:[{t:'easel',x:6,y:3,w:2,text:'PUZZLE',chart:true,label:'Study survey board',act:()=>openHaas()},{t:'desk',x:1,y:4,w:2,on:'papers'},{t:'desk',x:10,y:4,w:2,on:'laptop'},{t:'table',x:1,y:7,w:2,h:1,on:'papers'},{t:'stove',x:11,y:7,label:'Look at display',act:()=>sayLines('Display',['An LPG stove and cylinder. Clean cooking, if households keep refilling it.'])},{t:'cabinet',x:12,y:2,c:'#9fb0a8'}],
+    npcs:[{x:8,y:6,dir:'left',look:LOOKS.researcher,name:'Research Lead',talk:()=>{ qs('haas').started=true; sayLines('Research Lead',objDone('haas','puzzle')?['That’s the kind of hypothesis you can actually test in the field.']:['We study why families with a clean stove still cook on firewood.','The survey board has a fictional village’s data. What do you think is stopping them?'],LOOKS.researcher); }}]}),
+  future:()=>({name:'Future Lab', w:16, h:11, exitX:7, floor:'metal', wall:'#2a2154', wallTrim:'#7fe3ff',
+    walls:[{t:'whiteboard',x:1,w:4,text:'IDEAS'},{t:'screen',x:6,w:4,text:'NEXT',anim:'bars'},{t:'poster',x:11,w:2,text:'BUILD',c:'#7b6cf0'}],
+    props:[{t:'rocket',x:12,y:4,w:2,h:1,label:'Inspect rocket',act:()=>sayLines('Unfinished Rocket',['A rocket with a "WIP" label. Some parts are missing.','A note says: "To be finished with the right team."'],null,'fun')},
+      {t:'holo',x:3,y:4},{t:'holo',x:10,y:3,c:'#f4b740'},{t:'machine',x:1,y:7,w:2,h:2},{t:'easel',x:4,y:7,text:'IDEA',chart:true},{t:'plant',x:14,y:8}],
+    npcs:[{x:7,y:5,dir:'down',look:LOOKS.avin,name:'Avin',talk:talkAvin}]})
+};
+
+function buildInterior(id){
+  const def = SCENE_DEFS[id](); const isLobby = !!LOBBIES[id]; const L = LOBBIES[id];
+  const W = def.w || (L?L.w:ROOM_W), H = def.h || (L?L.h:ROOM_H), exitX = def.exitX!=null?def.exitX:(L?L.exitX:ROOM_EXIT);
+  const solid=new Uint8Array(W*H).fill(1); for(let y=2;y<=H-2;y++) for(let x=1;x<=W-2;x++) solid[y*W+x]=0;
+  const zones=[], props=[], npcs=[];
+  // exit
+  solid[(H-1)*W+exitX]=0; solid[(H-1)*W+exitX+1]=0;
+  let exitGo;
+  if(isLobby || id==='future'){ const tb=TOWN_B.find(b=>BUILDINGS[b.id].lobby===id); exitGo={scene:'town', x:(tb.door+1)*T, y:(tb.y+tb.h)*T+12, dir:'down'}; }
+  else { const lob=lobbyOf(id); exitGo={scene:lob, x:(LOBBIES[lob].doors[id]+1)*T, y:2*T+14, dir:'down'}; }
+  zones.push({x:exitX*T,y:(H-1)*T+4,w:2*T,h:T-4,label: isLobby||id==='future'?'Exit to Avin Town':'Back to hallway', go:exitGo});
+  // room doors
+  const doors=[];
+  if(L){ Object.entries(L.doors).forEach(([qid,dx])=>{ solid[W+dx]=0; solid[W+dx+1]=0; doors.push({x:dx,qid});
+    zones.push({x:dx*T,y:T,w:2*T,h:T,label:'Enter '+QUESTS[qid].name, go:{scene:qid, x:(ROOM_EXIT+1)*T, y:(ROOM_H-2)*T+12, dir:'up'}}); }); }
+  (def.locked||[]).forEach(d=>{ props.push({t:'lockedDoor',x:d.x,y:1,w:2,h:1,wallAct:true,label:'Try the door',act:()=>sayLines('Locked Door',['"FUTURE STARTUP IDEA". It’s locked.','A note on the door says: "Under construction. Check back after a few more side quests."'],null,'fun')}); });
+  (def.props||[]).forEach(p=>{ props.push(p); if(p.solid!==false && !p.flat) for(let y=p.y;y<p.y+(p.h||1);y++) for(let x=p.x;x<p.x+(p.w||1);x++) solid[y*W+x]=1; });
+  (def.npcs||[]).forEach(n=>{ npcs.push(n); solid[n.y*W+n.x]=1; });
+  // static layer
+  const c=document.createElement('canvas'); c.width=W*T; c.height=H*T; const g=c.getContext('2d');
+  R(g,0,0,W*T,H*T,'#0b0a14');
+  for(let y=2;y<H;y++) for(let x=1;x<W-1;x++){ if(y===H-1 && !(x===exitX||x===exitX+1)) continue; const f=FLOORS[def.floor]; f(g,x*T,y*T,x,y,def.fc); }
+  // wall face rows 0-1
+  const wc=def.wall, wt=def.wallTrim;
+  R(g,T,0,(W-2)*T,2*T,wc); R(g,T,0,(W-2)*T,4,shade(wc,-45)); for(let x=1;x<W-1;x++) R(g,x*T,4,1,2*T-8,shade(wc,-14)); R(g,T,2*T-5,(W-2)*T,3,wt); R(g,T,2*T-2,(W-2)*T,2,shade(wc,-50));
+  R(g,T,2*T,(W-2)*T,3,'rgba(0,0,0,.18)');
+  // side and bottom walls
+  for(let y=0;y<H;y++){ R(g,0,y*T,T,T,'#1c1830'); R(g,(W-1)*T,y*T,T,T,'#1c1830'); R(g,T-2,y*T,2,T,'#2c2748'); R(g,(W-1)*T,y*T,2,T,'#2c2748'); }
+  for(let x=0;x<W;x++){ if(x===exitX||x===exitX+1) continue; R(g,x*T,(H-1)*T,T,T,'#1c1830'); R(g,x*T,(H-1)*T,T,2,'#2c2748'); }
+  R(g,exitX*T,(H-1)*T+4,2*T,T-4,'#7a3b2a'); for(let i=0;i<4;i++) R(g,exitX*T+3+i*7,(H-1)*T+7,4,6,'#9c5a3a');
+  // wall decor
+  (def.walls||[]).forEach(w=>{ if(WALLDRAW[w.t]) WALLDRAW[w.t](g,w.x*T,0,w.w||1,2,w); });
+  // doors on wall
+  doors.forEach(d=>{ const X=d.x*T, q=QUESTS[d.qid], dn=S.q[d.qid]&&S.q[d.qid].done; R(g,X+1,9,30,23,OLX); R(g,X+2,10,28,22,shade(q.color,-30)); R(g,X+4,12,24,20,'#2a1d2e'); R(g,X+4,12,24,20,shade(q.color,-70));
+    R(g,X+15,12,2,20,OLX); R(g,X+12,22,2,2,'#f4b740'); R(g,X+18,22,2,2,'#f4b740');
+    const tw=textW(q.plaque); R(g,X+16-Math.ceil(tw/2)-3,1,tw+6,8,OLX); drawText(g,q.plaque,X+16-Math.ceil(tw/2),2,dn?'#4cc7ad':'#f5ead2');
+    if(dn){ R(g,X+22,13,6,6,'#4cc7ad'); R(g,X+23,16,1,1,OLX); R(g,X+24,17,1,1,OLX); R(g,X+25,14,1,3,OLX); } });
+  props.filter(p=>p.t==='lockedDoor').forEach(p=>{ const X=p.x*T; R(g,X+1,9,30,23,OLX); R(g,X+2,10,28,22,'#5c5f70'); for(let i=0;i<5;i++) R(g,X+4+i*5,12,2,20,'#8b94a8'); R(g,X+11,18,10,8,'#f4b740'); R(g,X+13,15,6,4,'#f4b740'); R(g,X+15,21,2,3,OLX);
+    const tw=textW('FUTURE IDEA'); R(g,X+16-Math.ceil(tw/2)-3,1,tw+6,8,OLX); drawText(g,'FUTURE IDEA',X+16-Math.ceil(tw/2),2,'#ff6fa8'); });
+  props.filter(p=>p.flat).forEach(p=>DRAW[p.t](g,p.x*T,p.y*T,p.w||1,p.h||1,p,0));
+  const name = def.name || QUESTS[id].name;
+  return {id,name,kind:isLobby?'lobby':(id==='future'?'future':'room'),W,H,ground:c,solid,props,npcs,zones,bg:'#0b0a14',walls:def.walls||[],quest:QUESTS[id]?id:null};
+}
+
+/* ===================== engine ===================== */
+const cv=$('#cv'), ctx=cv.getContext('2d');
+let VW=320, VH=180, SC=3;
+let scene=null; const P={x:S.x,y:S.y,dir:S.dir,anim:0,moving:false};
+const cam={x:0,y:0};
+const K={up:0,down:0,left:0,right:0};
+let mode='title'; // title | play
+let dlgOpen=false, modalOpen=false, fading=false, doorCool=0, target=null, nearZone=null;
+let titleT=0;
+function resize(){ const w=innerWidth, h=innerHeight; SC=Math.max(2,Math.floor(Math.min(w/300,h/170))); if(w<520) SC=2;
+  VW=Math.ceil(w/SC); VH=Math.ceil(h/SC); cv.width=VW; cv.height=VH; cv.style.width=VW*SC+'px'; cv.style.height=VH*SC+'px'; ctx.imageSmoothingEnabled=false; }
+addEventListener('resize',resize);
+
+function loadScene(id){ scene = id==='town'? buildTown() : buildInterior(id); $('#locn').textContent=scene.name; updateTracker(); }
+function goTo(go){ if(fading) return; fading=true; Snd.door(); hidePrompt(); $('#fade').style.opacity=1;
+  setTimeout(()=>{ loadScene(go.scene); P.x=go.x; P.y=go.y; P.dir=go.dir||'down'; doorCool=.35; snapCam(); save();
+    onEnter(); $('#fade').style.opacity=0; setTimeout(()=>{ fading=false; },180); },190); }
+function onEnter(){ if(scene.kind==='room'){ const st=qs(scene.id); if(!st.started && !st.done){ st.started=true; save(); questBanner(scene.id); } updateTracker(); }
+  if(scene.id==='future' && !S.futureSeen){ /* nothing */ } }
+
+function solidAt(tx,ty){ if(tx<0||ty<0||tx>=scene.W||ty>=scene.H) return true; return scene.solid[ty*scene.W+tx]===1; }
+function collides(x,y){ const x0=Math.floor((x-5)/T), x1=Math.floor((x+4.99)/T), y0=Math.floor((y-5)/T), y1=Math.floor((y-0.01)/T);
+  for(let ty=y0;ty<=y1;ty++) for(let tx=x0;tx<=x1;tx++) if(solidAt(tx,ty)) return true; return false; }
+function move(dx,dy){ const steps=Math.ceil(Math.max(Math.abs(dx),Math.abs(dy))); if(!steps) return;
+  const sx=dx/steps, sy=dy/steps; for(let i=0;i<steps;i++){ if(sx && !collides(P.x+sx,P.y)) P.x+=sx; else if(sx){ // slide around corners
+        const ny=[-1,1].find(o=>!collides(P.x+sx,P.y+o*3)&&!collides(P.x,P.y+o*3)&& Math.abs(dy)<0.01); if(ny!==undefined) P.y+=ny*0.6; }
+      if(sy && !collides(P.x,P.y+sy)) P.y+=sy; else if(sy){ const nx=[-1,1].find(o=>!collides(P.x+o*3,P.y+sy)&&!collides(P.x+o*3,P.y)&&Math.abs(dx)<0.01); if(nx!==undefined) P.x+=nx*0.6; } } }
+function busy(){ return mode!=='play'||dlgOpen||modalOpen||fading; }
+
+function snapCam(){ const mw=scene.W*T, mh=scene.H*T;
+  cam.x = mw<=VW ? -Math.floor((VW-mw)/2) : clamp(Math.round(P.x-VW/2),0,mw-VW);
+  cam.y = mh<=VH ? -Math.floor((VH-mh)/2) : clamp(Math.round(P.y-8-VH/2),0,mh-VH); }
+
+function update(dt,t){
+  doorCool=Math.max(0,doorCool-dt);
+  if(mode==='title'){ titleT+=dt; const mw=scene.W*T; P.x = 7*T + (Math.sin(titleT*0.12)*0.5+0.5)*(mw-14*T); P.y=13*T; snapCam(); return; }
+  if(!busy()){
+    let dx=(K.right?1:0)-(K.left?1:0), dy=(K.down?1:0)-(K.up?1:0);
+    if(dx||dy){ const l=Math.hypot(dx,dy), sp=80*dt; move(dx/l*sp, dy/l*sp);
+      if(Math.abs(dx)>=Math.abs(dy)&&dx) P.dir=dx<0?'left':'right'; else if(dy) P.dir=dy<0?'up':'down';
+      P.anim+=dt*8; P.moving=true;
+      if(doorCool<=0) for(const z of scene.zones){ const fx=P.x, fy=P.y-2; if(fx>=z.x&&fx<z.x+z.w&&fy>=z.y&&fy<z.y+z.h){ goTo(z.go); break; } }
+    } else { P.anim=0; P.moving=false; }
+    findTarget();
+  }
+  snapCam();
+}
+function rectDist(px,py,x,y,w,h){ const dx=Math.max(x-px,0,px-(x+w)), dy=Math.max(y-py,0,py-(y+h)); return Math.hypot(dx,dy); }
+function findTarget(){ target=null; nearZone=null; let best=15; const cx=P.x, cy=P.y-5;
+  for(const p of scene.props){ if(!p.act) continue; if(p.t==='item'&&S.flags[p.flag]) continue;
+    let rx=p.x*T, ry=p.y*T, rw=(p.w||1)*T, rh=(p.h||1)*T; if(p.wallAct){ ry=T; rh=T; }
+    const d=rectDist(cx,cy,rx,ry,rw,rh)-(p.t==='item'?2:0); if(d<best){ best=d; target={kind:'prop',p,x:rx+rw/2,y:ry-(p.t==='bookshelf'||p.t==='cabinet'||p.t==='vending'?16:p.t==='rocket'?40:p.t==='item'?4:6),label:p.label||'Inspect'}; } }
+  for(const n of scene.npcs){ const d=rectDist(cx,cy,n.x*T,n.y*T,T,T); if(d<best+1){ best=d; target={kind:'npc',n,x:n.x*T+8,y:n.y*T-6,label:'Talk to '+n.name.split(',')[0]}; } }
+  if(!target){ for(const z of scene.zones){ const d=rectDist(cx,cy,z.x,z.y,z.w,z.h); if(d<20){ nearZone=z; break; } } }
+  if(!target && scene.id==='town' && !futureOpen()){ const b=TOWN_B[1]; const zx=b.door*T, zy=(b.y+b.h-1)*T; if(rectDist(cx,cy,zx,zy,2*T,T)<18) nearZone={x:zx,y:zy,w:2*T,h:T,label:`Locked: finish ${UNLOCK_AT} rooms (${doneCount()}/${UNLOCK_AT})`,locked:true}; }
+}
+function interact(){ Snd.init(); if(busy()) return; if(!target) return; Snd.blip();
+  if(target.kind==='npc'){ const n=target.n; const dx=P.x-(n.x*T+8), dy=(P.y-8)-(n.y*T+8); n.dir = Math.abs(dx)>Math.abs(dy) ? (dx<0?'left':'right') : (dy<0?'up':'down'); n.talk(); }
+  else target.p.act(); }
+
+/* ---------- render ---------- */
+function render(t){ ctx.fillStyle=scene.bg; ctx.fillRect(0,0,VW,VH);
+  ctx.save(); ctx.translate(-cam.x,-cam.y);
+  ctx.drawImage(scene.ground,0,0);
+  // animated wall screens
+  (scene.walls||[]).forEach(w=>{ if(w.anim) drawScreenAnim(ctx,w.x*T,0,w.w||1,{mode:w.anim,seed:w.x},t); });
+  const L=[]; const vx0=cam.x-48, vx1=cam.x+VW+48, vy0=cam.y-48, vy1=cam.y+VH+64;
+  for(const p of scene.props){ if(p.flat||p.t==='lockedDoor') continue; const X=p.x*T, Y=p.y*T; if(X>vx1||X+(p.w||1)*T<vx0||Y>vy1||Y+(p.h||1)*T<vy0) continue;
+    L.push({y:(p.y+(p.h||1))*T + (p.t==='item'?2:0) - (p.t==='rug'?999:0), d:()=>drawProp(p,t)}); }
+  if(scene.buildings) for(const b of scene.buildings){ L.push({y:(b.y+b.h)*T-1, d:()=>{ const key='b_'+b.id+(b.id==='future'?futureOpen():'')+bDone(b.id); const c=spr(key,b.w*T+8,b.h*T+24,g=>drawBuilding(g,b)); ctx.drawImage(c,b.x*T-4,b.y*T-24); }}); }
+  for(const n of scene.npcs){ L.push({y:n.y*T+T-1, d:()=>{ const bob=n.look.robot?0:(Math.sin(t*2+n.x)>0.85?1:0); drawChar(ctx,n.x*T+8,n.y*T+T-1,n.dir,bob?2:0,n.look,t,n.id==='locke'&&!futureOpen()); if(npcHasNews(n)) drawBang(n.x*T+8,n.y*T-20,t); }}); }
+  if(mode==='play') L.push({y:P.y, d:()=>{ const fr=P.moving?Math.floor(P.anim)%4:0; drawChar(ctx,P.x,P.y,P.dir,fr,LOOKS.avin,t); }});
+  L.sort((a,b)=>a.y-b.y).forEach(e=>e.d());
+  ctx.restore();
+  if(scene.id!=='town'){ const gr=ctx.createRadialGradient(VW/2,VH/2,Math.min(VW,VH)*0.4,VW/2,VH/2,Math.max(VW,VH)*0.75); gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,.35)'); ctx.fillStyle=gr; ctx.fillRect(0,0,VW,VH); }
+  positionPrompt();
+}
+const sprCache={};
+function spr(key,w,h,fn){ if(!sprCache[key]){ const c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d'); fn(g); sprCache[key]=c; } return sprCache[key]; }
+function drawProp(p,t){ const X=p.x*T, Y=p.y*T;
+  if(p.t==='tree'){ const c=spr('tree'+p.v,28,40,g=>{ const cols=[['#2f6b3a','#3f8a45','#5fae55'],['#2a5f45','#3a7e57','#56a36d'],['#3a6b2f','#4f8a3a','#72ad4f']][p.v];
+      R(g,11,26,6,14,OLX); R(g,12,26,4,13,'#6b4428'); [[14,16,13],[14,15,11],[12,12,7]].forEach(([cx,cy,r],i)=>{ for(let yy=-r;yy<=r;yy++){ const ww=Math.round(Math.sqrt(r*r-yy*yy)); if(i===0) R(g,cx-ww-1,cy+yy,ww*2+2,1,OLX); R(g,cx-ww,cy+yy,ww*2,1,cols[i]); } });
+      R(g,8,10,2,2,'#8fd07a'); R(g,17,8,2,2,'#8fd07a'); }); ctx.drawImage(c,X-6,Y-24); return; }
+  if(p.t==='bush'){ const c=spr('bush',18,16,g=>{ for(let yy=-6;yy<=6;yy++){ const ww=Math.round(Math.sqrt(49-yy*yy)*1.1); R(g,9-ww-1,8+yy,ww*2+2,1,OLX); R(g,9-ww,8+yy,ww*2,1,yy<0?'#5fae55':'#3f8a45'); } R(g,5,5,2,2,'#ef7470'); R(g,11,7,2,2,'#ef7470'); }); ctx.drawImage(c,X-1,Y); return; }
+  if(p.fileId) p.seen=!!S.flags['mt_'+p.fileId];
+  if(p.flag && p.t==='trophy') p.seen=!!S.flags[p.flag];
+  DRAW[p.t](ctx,X,Y,p.w||1,p.h||1,p,t); }
+function drawBang(x,y,t){ const b=Math.round(Math.sin(t*5)*1.5); R(ctx,x-3,y+b,6,9,OLX); R(ctx,x-2,y+1+b,4,7,'#f4b740'); R(ctx,x-1,y+2+b,2,3,OLX); R(ctx,x-1,y+6+b,2,1,OLX); }
+function npcHasNews(n){ if(!scene) return false;
+  if(scene.id==='town'&&n.id==='guide') return !S.guide;
+  if(scene.kind==='room'){ const q=scene.quest; if(!q||qs(q).done) return false;
+    if(q==='bnc'&&n.name==='Project Lead') return objDone('bnc','docs');
+    if(q==='classroom'&&n.name==='Faculty Advisor') return objDone('classroom','feedback');
+    if(q==='classroom'&&n.name==='Student') return false;
+    return !qs(q).talked; }
+  if(scene.id==='future'&&n.name==='Avin') return true;
+  return false; }
+
+/* ===================== UI: prompt, HUD, tracker ===================== */
+const promptEl=$('#prompt');
+function hidePrompt(){ promptEl.hidden=true; }
+function positionPrompt(){ if(mode!=='play'||busy()){ promptEl.hidden=true; return; }
+  let tx,ty,label,key='E'; if(target){ tx=target.x; ty=target.y; label=target.label; } else if(nearZone){ tx=nearZone.x+nearZone.w/2; ty=nearZone.y-(scene.id==='town'?30:2); label=nearZone.label; key=nearZone.locked?'':'WALK IN'; if(scene.kind!=='town'&&nearZone.y>T*2) ty=nearZone.y-4; } else { promptEl.hidden=true; return; }
+  promptEl.innerHTML=(key?`<span class="key">${key}</span>`:'')+esc(label); promptEl.hidden=false;
+  const r=cv.getBoundingClientRect(); let sx=(tx-cam.x)*SC+r.left, sy=(ty-cam.y)*SC+r.top;
+  sx=clamp(sx,90,innerWidth-90); sy=clamp(sy,40,innerHeight-10); promptEl.style.left=sx+'px'; promptEl.style.top=sy+'px'; }
+function updateTracker(){ const el=$('#tracker'); if(mode!=='play'||!scene){ el.hidden=true; return; } el.hidden=false;
+  let h='';
+  if(scene.kind==='room'){ const q=QUESTS[scene.id], st=qs(scene.id);
+    h=`<div class="h">QUEST</div><div class="q">${esc(q.title)}</div>`+q.objs.map(o=>{ const n=st.p[o.id]||0, d=n>=o.n; return `<div class="o${d?' d':''}"><span>${d?'[x]':'[ ]'}</span><span>${esc(o.text)}${o.n>1?` (${n}/${o.n})`:''}</span></div>`; }).join('')+(st.done?'<div class="o d">Done! Exit at the bottom door.</div>':'');
+  } else { const n=doneCount();
+    h=`<div class="h">PROGRESS</div>`;
+    if(!S.guide) h+=`<div class="q">Talk to Tara, the town guide</div>`;
+    h+=`<div class="o${n>=UNLOCK_AT?' d':''}"><span>${n>=UNLOCK_AT?'[x]':'[ ]'}</span><span>Rooms explored: ${n}/${ROOM_IDS.length}</span></div>`;
+    h+= futureOpen()? (S.ach.includes('future')?`<div class="o d"><span>[x]</span><span>Future Lab visited</span></div>`:`<div class="q">The Future Lab is open! Head north.</div>`) : `<div class="o"><span>[ ]</span><span>Future Lab opens at ${UNLOCK_AT} rooms</span></div>`;
+    if(scene.kind==='lobby'){ const B=BUILDINGS[LOBBIES[scene.id].b]; const dn=B.rooms.filter(r=>S.q[r]&&S.q[r].done).length; h+=`<div class="o"><span>&gt;</span><span>This building: ${dn}/${B.rooms.length} rooms</span></div>`; }
+  }
+  el.innerHTML=h; const hb=$('#hud').getBoundingClientRect(); el.style.top=(hb.bottom+8)+'px'; $('#toasts').style.top=(hb.bottom+8)+'px'; }
+
+/* ===================== dialogue ===================== */
+let dq=[], dcur=null, dshown=0, dtimer=null, dcb=null;
+function sayLines(name,lines,look,tag,cb){ say(lines.map(t=>({n:name,t,look,tag})),cb); }
+function say(lines,cb){ dq=lines.slice(); dcb=cb||null; dlgOpen=true; $('#dlg').hidden=false; hidePrompt(); nextLine(); }
+function nextLine(){ if(dtimer){ clearInterval(dtimer); dtimer=null; }
+  if(!dq.length){ closeDlg(); return; } dcur=dq.shift();
+  $('#dnm').innerHTML=esc(dcur.n)+(dcur.tag==='fic'?' <span class="tag fic">FICTIONAL</span>':dcur.tag==='fun'?' <span class="tag fun">GAME HUMOUR</span>':dcur.tag==='real'?' <span class="tag real">FROM THE CV</span>':'');
+  const pc=$('#dpor'), pg=pc.getContext('2d'); pg.clearRect(0,0,24,24); R(pg,0,0,24,24,'#26234a');
+  if(dcur.look){ pc.style.visibility='visible'; pg.save(); pg.translate(0,0); drawChar(pg,12,22,'down',0,dcur.look,0,false); pg.restore(); } else { pc.style.visibility='visible'; drawIcon(pg,dcur.tag==='real'?'book':dcur.tag==='fun'?'star':'magnify',5,5,'#f4b740',2); }
+  dshown=0; const tx=$('#dtx'); tx.textContent=''; const full=dcur.t;
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce){ tx.textContent=full; dshown=full.length; return; }
+  dtimer=setInterval(()=>{ dshown+=2; tx.textContent=full.slice(0,dshown); if(dshown%6===0) Snd.talk(); if(dshown>=full.length){ clearInterval(dtimer); dtimer=null; } },22); }
+function advance(){ if(!dlgOpen) return; if(dtimer){ clearInterval(dtimer); dtimer=null; $('#dtx').textContent=dcur.t; dshown=dcur.t.length; return; } Snd.blip(); nextLine(); }
+function closeDlg(){ if(dtimer){ clearInterval(dtimer); dtimer=null; } $('#dlg').hidden=true; dlgOpen=false; dq=[]; const cb=dcb; dcb=null; if(scene&&scene.kind==='room') qs(scene.id).talked=true; if(cb) setTimeout(cb,60); }
+function skipDlg(){ dq=[]; if(dtimer){ clearInterval(dtimer); dtimer=null; } closeDlg(); }
+$('#dnext').onclick=advance; $('#dskip').onclick=skipDlg;
+
+/* ===================== modal ===================== */
+let modalClose=null;
+function openModal(html,{onClose,closable=true}={}){ modalOpen=true; hidePrompt(); const m=$('#modal'); $('#mbox').innerHTML=html; m.hidden=false; modalClose=closable?(onClose||(()=>{})):null; $('#mbox').scrollTop=0;
+  const f=$('#mbox').querySelector('button'); if(f) setTimeout(()=>f.focus({preventScroll:true}),30); }
+function closeModal(){ $('#modal').hidden=true; modalOpen=false; const cb=modalClose; modalClose=null; $('#app').focus({preventScroll:true}); if(cb) cb(); }
+$('#modal').addEventListener('click',e=>{ if(e.target.id==='modal' && modalClose) closeModal(); });
+const fictionTag='<span class="tag fic">FICTIONAL EXAMPLE</span>';
+
+/* ===================== toasts & achievements ===================== */
+function toast(a,b,icon,color){ const el=document.createElement('div'); el.className='toast px-panel';
+  const c=badgeCanvas(icon,color); el.appendChild(c); const d=document.createElement('div'); d.innerHTML=`<div class="a">${esc(a)}</div><div class="b">${esc(b)}</div>`; el.appendChild(d);
+  $('#toasts').appendChild(el); setTimeout(()=>{ el.classList.add('out'); setTimeout(()=>el.remove(),320); },3600); }
+function questBanner(id){ const q=QUESTS[id]; toast('NEW QUEST',q.title,q.icon,q.color); }
+function award(id){ if(S.ach.includes(id)) return false; S.ach.push(id); save(); return true; }
+function completeQuest(id){ const st=qs(id); if(st.done) return; st.done=true; award(id); save(); Snd.ach(); updateTracker();
+  const q=QUESTS[id]; const after=()=>{ const extra=[];
+    if((id==='glexica'||id==='wootz') && qs('glexica').done && qs('wootz').done && award('startup_explorer')) extra.push(()=>{ Snd.ach(); toast('BONUS BADGE','Startup Explorer','rocket','#f08a3c'); });
+    if(doneCount()===UNLOCK_AT) extra.push(()=>{ Snd.get(); toast('UNLOCKED','The Future Lab is open','star','#f4b740'); });
+    extra.forEach((f,i)=>setTimeout(f,i*900)); };
+  showReveal(id,after); }
+function showReveal(id,cb){ const q=QUESTS[id], r=q.reveal;
+  openModal(`<div class="reveal-head"><canvas id="rb" width="16" height="16"></canvas><div><div class="tag real" style="margin-bottom:6px">ACHIEVEMENT UNLOCKED</div><h2>${esc(q.ach)}</h2><div class="sub" style="font-size:19px">Quest complete: ${esc(q.title)}</div></div></div>
+    <h3>WHAT AVIN ACTUALLY DID <span class="tag real">FROM THE CV</span></h3>
+    <div class="card"><div class="role">${esc(r.role)}</div><div class="sub" style="font-size:20px">${esc(r.org)}</div>${r.dates?`<div class="dates">${esc(r.dates)}</div>`:''}
+    <ul class="cv">${r.lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>
+    <div class="chips" style="margin-top:12px">${q.skills.map(s=>`<span class="chip on">SKILL: ${esc(s.toUpperCase())}</span>`).join('')}</div>
+    <div class="mfoot"><button id="rOk">Continue</button></div>`,{onClose:cb});
+  const c=$('#rb'); c.getContext('2d').drawImage(badgeCanvas(q.icon,q.color),0,0); $('#rOk').onclick=closeModal; }
+
+/* ===================== quest logic ===================== */
+function talkGuide(){ const first=!S.guide; S.guide=true; save(); updateTracker();
+  sayLines('Tara, Town Guide', first? ['Welcome to Avin Town! I’m Tara. I’ll keep this quick.','Walk with WASD or the arrow keys. Press E or Space to talk to people and inspect things.','Each building is a chapter of Avin’s life. Walk into a door to go inside.',`Finish any ${UNLOCK_AT} rooms and the Future Lab up north will open. That’s where the story ends.`,'Press J for your journal and M for the map. Have fun!']
+    : [ futureOpen()? 'The Future Lab is open. It’s the purple building up north.' : `You’ve explored ${doneCount()} of ${UNLOCK_AT} rooms needed for the Future Lab. IIT Delhi to the northwest has the most rooms.`,'Press M to fast-travel if you get tired of walking.'], LOOKS.guide); }
+function acItem(flag,title,text){ if(progress('academics','items',flag)) sayLines(title,[text],null,'real'); }
+function bncDoc(flag,title,text){ if(progress('bnc','docs',flag)) sayLines(title,[text],null,'fic'); }
+function talkBncLead(){ qs('bnc').started=true;
+  if(qs('bnc').done) return sayLines('Project Lead',['Project kicked off. The team is already arguing about fonts.'],LOOKS.lead);
+  if(objDone('bnc','docs')) return sayLines('Project Lead',['Brief, roster, plan. Perfect.','We set up the startup projects vertical for exactly this: real startups, real problems, student teams.'],LOOKS.lead,null,()=>progress('bnc','deliver','bnc_del'));
+  const n=qs('bnc').p.docs||0;
+  sayLines('Project Lead',['A startup wants our help, but nothing’s organised yet.',`Can you collect the client brief, the team roster and the project plan? You have ${n}/3. They’re on the table, the easel and the desk.`],LOOKS.lead); }
+function trophy(flag,title,text){ const got=progress('arena','stories',flag); sayLines(title,[text],null,'real'); }
+function talkFaculty(){ qs('classroom').started=true;
+  if(qs('classroom').done) return sayLines('Faculty Advisor',['The revised policy is working well. Thank you for raising it.'],LOOKS.faculty);
+  if(!objDone('classroom','feedback')) return sayLines('Faculty Advisor',['I’m happy to hear concerns, but bring me something concrete from the students first.',`Feedback collected: ${qs('classroom').p.feedback||0}/2.`],LOOKS.faculty);
+  sayLines('Faculty Advisor',['You’ve brought clear feedback and a reasonable proposal.','Let’s take it to the committee and revise the policy.'],LOOKS.faculty,'fic',()=>progress('classroom','faculty','cl_fac')); }
+function talkPlacement(){ qs('placement').started=true;
+  if(qs('placement').done) return sayLines('Placement Coordinator',['Schedule locked. Not a single clash. Beautiful.'],LOOKS.coord);
+  sayLines('Placement Coordinator',['Placement day! Three companies, two interview rooms, and their time slots overlap.','Can you assign them so nobody clashes?'],LOOKS.coord,null,openPlacement); }
+function talkAvin(){ S.futureSeen=true; save();
+  const lines=['You’ve explored where I’ve been.','Consulting taught me how to solve problems. Startups taught me how products are built. Venture capital showed me how businesses are evaluated. And college taught me how to take initiative.','But I think the most interesting chapter is still ahead.','I want to build things people actually use, understand how products grow, and eventually start something of my own.','Maybe Wispr Flow is where the next adventure begins.'];
+  sayLines('Avin',lines,LOOKS.avin,null,()=>{ if(award('future')){ Snd.ach(); toast('ACHIEVEMENT','Next Chapter Unlocked','star','#f4b740'); } setTimeout(showFinal,400); }); }
+
+/* ===================== mini-games ===================== */
+function openPlacement(){
+  const cos=[{n:'Quantloom',a:10,b:12,c:'#e3a43c'},{n:'Bluebirch Analytics',a:11,b:13,c:'#5aa0e8'},{n:'Tandoor Robotics',a:12,b:14,c:'#e8735a'}];
+  const asg=[null,null,null]; let msg='', ok=false;
+  const conflicts=()=>{ const out=[]; for(let i=0;i<3;i++) for(let j=i+1;j<3;j++) if(asg[i]&&asg[i]===asg[j]&&cos[i].a<cos[j].b&&cos[j].a<cos[i].b) out.push([i,j]); return out; };
+  const draw=()=>{ const cf=conflicts(), bad=new Set(cf.flat());
+    const tl=room=>`<div class="ticks"><span>${room}</span></div><div class="tl">${cos.map((c,i)=>asg[i]===room?`<div class="bar${bad.has(i)?' x':''}" style="left:${(c.a-10)/4*100}%;width:${(c.b-c.a)/4*100}%;background:${c.c}">${esc(c.n)}</div>`:'').join('')}</div>`;
+    openModal(`<h2>Placement Day Chaos ${fictionTag}</h2><p class="sub">Three companies, two interview rooms. Put each company in a room so no two interviews in the same room overlap.</p>
+      ${cos.map((c,i)=>`<div class="srow"><span class="nm" style="color:${c.c}">${esc(c.n)} <span class="sub">${c.a}:00–${c.b}:00</span></span><button class="small ${asg[i]==='Room A'?'on':'ghost'}" data-i="${i}" data-r="Room A">Room A</button><button class="small ${asg[i]==='Room B'?'on':'ghost'}" data-i="${i}" data-r="Room B">Room B</button></div>`).join('')}
+      <h3>TIMELINE</h3><div class="ticks"><span>10:00</span><span>11:00</span><span>12:00</span><span>13:00</span><span>14:00</span></div>${tl('Room A')}${tl('Room B')}
+      ${msg?`<div class="fb ${ok?'ok':'bad'}">${msg}</div>`:''}
+      <div class="mfoot"><button class="ghost" id="mX">Close</button><button id="mGo" ${asg.includes(null)?'disabled':''}>${ok?'Continue':'Lock schedule'}</button></div>`);
+    $('#mbox').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ if(ok) return; asg[+b.dataset.i]=b.dataset.r; msg=''; Snd.blip(); draw(); });
+    $('#mX').onclick=closeModal;
+    $('#mGo').onclick=()=>{ if(ok){ closeModal(); progress('placement','sched','pl_s'); return; }
+      const cf=conflicts(); if(cf.length){ const [i,j]=cf[0]; msg=`${cos[i].n} and ${cos[j].n} are both in ${asg[i]} and overlap ${Math.max(cos[i].a,cos[j].a)}:00–${Math.min(cos[i].b,cos[j].b)}:00. Try moving one.`; Snd.bad(); }
+      else { ok=true; msg='No clashes. Quantloom finishes at 12:00 just as Tandoor starts, so they can share a room. That’s placement day ops: small puzzles, many times over.'; Snd.get(); }
+      draw(); }; };
+  draw(); }
+
+function openGlexica(){ if(qs('glexica').done) return sayLines('Landing Page',['Fixed and shipped. Visitors get it in three seconds now.']);
+  qs('glexica').started=true;
+  const H=[{t:'Synergistic AI-powered next-gen paradigm platform',ok:false,f:'Lots of buzzwords, but what does it actually do?'},{t:'Turn sales calls into follow-up notes in seconds',ok:true,f:'Clear. A visitor knows what it does and why it matters.'},{t:'Welcome to our website!',ok:false,f:'Friendly, but it says nothing about the product.'}];
+  const F=[{t:'Auto-summaries after every call',ok:true},{t:'Action items synced to your CRM',ok:true},{t:'Works in 20+ languages',ok:true},{t:'Our logo now has a dark mode',ok:false},{t:'Founded in a hostel room',ok:false},{t:'The office has a slide',ok:false}];
+  const C=[{t:'Submit',ok:false,f:'Submit what? Buttons should say what happens next.'},{t:'Start free, no card needed',ok:true,f:'Clear, low-risk, and tells people what happens next.'},{t:'Learn more about our journey',ok:false,f:'Nice story, but it sends people away from trying the product.'}];
+  let step=0, h=null, fs=new Set(), c=null, msg='', ok=false;
+  const page=(before)=>`<div class="lp ${before?'before':''}"><div class="nav"><b>NoteNest</b><span>Pricing &middot; Login</span></div>
+    <div class="hl">${esc(before?H[0].t:H[h].t)}</div><div class="fs">${(before?[F[4],F[3],F[5]]:[...fs].map(i=>F[i])).map(f=>`<div>${esc(f.t)}</div>`).join('')}</div><span class="cta">${esc(before?C[0].t:C[c].t)}</span></div>`;
+  const draw=()=>{ let body='';
+    if(step===0) body=`<h3>STEP 1 OF 3: PICK A HEADLINE</h3>${H.map((x,i)=>`<button class="opt ${h===i?(x.ok?'ok':'bad'):''}" data-h="${i}">${esc(x.t)}</button>`).join('')}`;
+    if(step===1) body=`<h3>STEP 2 OF 3: PICK 3 FEATURES TO SHOW FIRST</h3><p class="sub">Show what matters to a sales team. ${fs.size}/3 picked.</p>${F.map((x,i)=>`<button class="opt ${fs.has(i)?'on':''}" data-f="${i}">${esc(x.t)}</button>`).join('')}`;
+    if(step===2) body=`<h3>STEP 3 OF 3: PICK THE BUTTON TEXT</h3>${C.map((x,i)=>`<button class="opt ${c===i?(x.ok?'ok':'bad'):''}" data-c="${i}">${esc(x.t)}</button>`).join('')}`;
+    if(step===3) body=`<h3>BEFORE AND AFTER</h3><div class="grid g2"><div><div class="sub" style="margin-bottom:4px">Before</div>${page(true)}</div><div><div class="sub" style="margin-bottom:4px">After</div>${page(false)}</div></div><div class="fb ok">A clear headline, the features buyers care about, and one obvious next step. Avin did this for real at Glexica after studying 50+ YC startup landing pages.</div>`;
+    openModal(`<h2>Fix the Landing Page ${fictionTag}</h2><p class="sub">NoteNest is a made-up AI notes tool. Its landing page confuses visitors. Fix it in three steps.</p>${body}${msg?`<div class="fb ${ok?'ok':'bad'}">${esc(msg)}</div>`:''}
+      <div class="mfoot"><button class="ghost" id="mX">Close</button>${step===1?`<button id="mF" ${fs.size===3?'':'disabled'}>Check features</button>`:''}${(step<3&&ok)?'<button id="mN">Next step</button>':''}${step===3?'<button id="mD">Ship it</button>':''}</div>`);
+    const mb=$('#mbox');
+    mb.querySelectorAll('[data-h]').forEach(b=>b.onclick=()=>{ h=+b.dataset.h; msg=H[h].f; ok=H[h].ok; ok?Snd.get():Snd.bad(); draw(); });
+    mb.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{ c=+b.dataset.c; msg=C[c].f; ok=C[c].ok; ok?Snd.get():Snd.bad(); draw(); });
+    mb.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.f; if(fs.has(i)) fs.delete(i); else if(fs.size<3) fs.add(i); msg=''; ok=false; Snd.blip(); draw(); });
+    $('#mX').onclick=closeModal;
+    if($('#mF')) $('#mF').onclick=()=>{ const bad=[...fs].filter(i=>!F[i].ok); if(bad.length){ msg=`"${F[bad[0]].t}" is fun, but a buyer doesn’t care. Swap it for something that helps them decide.`; ok=false; Snd.bad(); } else { msg='Exactly the three things a sales team would want to know.'; ok=true; Snd.get(); } draw(); };
+    if($('#mN')) $('#mN').onclick=()=>{ step++; msg=''; ok=false; draw(); };
+    if($('#mD')) $('#mD').onclick=()=>{ closeModal(); progress('glexica','page','gx'); }; };
+  draw(); }
+
+function openWootz(){ if(qs('wootz').done) return sayLines('RFQ Dashboard',['Today’s pick is already flagged for follow-up.']);
+  qs('wootz').started=true;
+  const R5=[
+    {id:'RFQ-101',reg:'NAM',val:'$480k',m:'6%',mat:'Inconel 625',prod:'Custom manifold',cust:'New buyer, one-off order',f:'Big ticket, but a 6% margin and a one-off new buyer. Lots of effort for little profit and a low chance of winning.'},
+    {id:'RFQ-102',reg:'EMEA',val:'$95k',m:'31%',mat:'Stainless steel 316',prod:'Flanged pipe spool',cust:'Repeat buyer, 5 past orders',f:'Close! Great margin and a loyal buyer. But it’s small. Is there one with similar odds and more value?'},
+    {id:'RFQ-103',reg:'ANZ',val:'$210k',m:'24%',mat:'Carbon steel',prod:'Machined bracket set',cust:'Repeat buyer, won 3 of their last 4 quotes',ok:true,f:'Solid value, healthy margin, a material the factory handles all the time, and a buyer who usually says yes. That’s worth chasing.'},
+    {id:'RFQ-104',reg:'NAM',val:'$640k',m:'3%',mat:'Titanium Grade 5',prod:'Aerospace fitting',cust:'New buyer, 12 competing bidders',f:'The biggest number on the table, but a 3% margin with 12 bidders. Expensive to chase and likely lost.'},
+    {id:'RFQ-105',reg:'EMEA',val:'$35k',m:'42%',mat:'Aluminium 6061',prod:'Prototype housing',cust:'Unknown buyer, single prototype',f:'Highest margin, but it’s a tiny one-time prototype from a buyer we know nothing about.'}];
+  let pick=null, tries=0;
+  const draw=()=>{ const p=pick!=null?R5[pick]:null;
+    openModal(`<h2>The RFQ Detective ${fictionTag}</h2><p class="sub">An RFQ is a request for quotation: a buyer asks for a price on parts they need made. A good one to chase isn’t always the biggest. Look at value, margin, the material, and how often this buyer actually turns quotes into orders.</p>
+      <div class="grid g3" style="margin-top:10px">${R5.map((r,i)=>`<div class="card ${pick===i?(r.ok?'ok':'bad'):''}"><div class="ct">${r.id} &middot; ${r.reg}</div><dl><dt>Value</dt><dd>${r.val}</dd><dt>Margin</dt><dd>${r.m}</dd><dt>Material</dt><dd>${esc(r.mat)}</dd><dt>Product</dt><dd>${esc(r.prod)}</dd><dt>Buyer</dt><dd>${esc(r.cust)}</dd></dl><div style="margin-top:8px"><button class="small ${p&&p.ok?'ghost':''}" data-r="${i}" ${p&&p.ok?'disabled':''}>Investigate</button></div></div>`).join('')}</div>
+      ${p?`<div class="fb ${p.ok?'ok':'bad'}">${esc(p.f)}${!p.ok&&tries>=2?' Hint: look at RFQ-103.':''}</div>`:''}
+      <div class="mfoot"><button class="ghost" id="mX">Close</button>${p&&p.ok?'<button id="mD">Flag for follow-up</button>':''}</div>`);
+    $('#mbox').querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{ pick=+b.dataset.r; if(!R5[pick].ok){ tries++; Snd.bad(); } else Snd.get(); draw(); });
+    $('#mX').onclick=closeModal; if($('#mD')) $('#mD').onclick=()=>{ closeModal(); progress('wootz','rfq','wz'); }; };
+  draw(); }
+
+function openCampus(){ const PS=[
+  {n:'KisanCart',idea:'B2B marketplace linking farmer groups to restaurants',mk:'Restaurants in tier-2 cities',bm:'Commission on each order',gr:'Restaurants reorder every week',risk:'Thin margins and costly logistics',f:'You’d dig into unit economics: after delivery costs, does each order actually make money? Then repeat rates by city.'},
+  {n:'LoopLearn',idea:'AI tutor for entrance-exam students on WhatsApp',mk:'Millions of exam aspirants',bm:'Monthly subscription',gr:'Spreading fast through coaching hubs',risk:'Crowded market with big edtech players',f:'You’d test how much it costs to win a student, how many stay past month two, and why they’d pick this over free alternatives.'},
+  {n:'VoltBox',idea:'Battery-swap stations for e-rickshaws',mk:'E-rickshaw drivers in large cities',bm:'Fee per battery swap',gr:'Each station serves hundreds of drivers',risk:'Capital-heavy and needs city permits',f:'You’d model how long each station takes to pay back, how fast batteries wear out, and how easily it can expand city by city.'}];
+  let pick=null;
+  const draw=()=>{ openModal(`<h2>The Investor’s Challenge ${fictionTag}</h2><p class="sub">Three pitches, time to dig into one. There’s no single right answer. What matters is knowing which questions to ask next.</p>
+    <div class="grid g3" style="margin-top:10px">${PS.map((p,i)=>`<div class="card ${pick===i?'sel':''}"><div class="ct">${esc(p.n)}</div><dl><dt>Idea</dt><dd>${esc(p.idea)}</dd><dt>Market</dt><dd>${esc(p.mk)}</dd><dt>Model</dt><dd>${esc(p.bm)}</dd><dt>Growth</dt><dd>${esc(p.gr)}</dd><dt>Risk</dt><dd>${esc(p.risk)}</dd></dl><div style="margin-top:8px"><button class="small" data-p="${i}">Back for diligence</button></div></div>`).join('')}</div>
+    ${pick!=null?`<div class="fb ok"><b>${esc(PS[pick].n)}</b>: ${esc(PS[pick].f)} Every pick trades off market size, how the business makes money, and what could go wrong.</div>`:''}
+    <div class="mfoot"><button class="ghost" id="mX">Close</button>${pick!=null?'<button id="mD">Write the memo</button>':''}</div>`);
+    $('#mbox').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{ pick=+b.dataset.p; Snd.get(); draw(); });
+    $('#mX').onclick=closeModal; if($('#mD')) $('#mD').onclick=()=>{ closeModal(); progress('campus','pick','cf'); }; };
+  draw(); }
+
+const MT={
+  sky:{n:'SkyRelay',d:'Long-endurance drones for border surveillance.',opts:['Long government buying cycles and certification','Not enough followers on social media','The drones are too quiet'],a:0,f:'Defence buyers move slowly and need certification. A startup can run out of money while waiting for its first order.'},
+  orbit:{n:'OrbitForge',d:'3D-printed engine parts for small rockets.',opts:['The office is too far from the airport','Proving reliability through costly qualification testing','Rockets are going out of fashion'],a:1,f:'Nobody flies a part that hasn’t been qualified. Testing is slow and expensive, and it has to happen before any revenue.'},
+  shop:{n:'ShopSense',d:'Sensors that predict machine breakdowns on factory floors (Industry 4.0).',opts:['The sensors are too small to see','Factories don’t have Wi-Fi in the cafeteria','Getting cautious factories to change how they work and connect old machines'],a:2,f:'The tech works in a pilot. The hard part is getting a busy factory to change its routine and connect decades-old machines.'}};
+function openMount(id){ const s=MT[id]; qs('mounttech').started=true;
+  if(S.flags['mt_'+id]) return sayLines(s.n,['File reviewed. '+s.f]);
+  let pick=null;
+  const draw=()=>{ openModal(`<h2>Startup File: ${esc(s.n)} ${fictionTag}</h2><p>${esc(s.d)}</p><h3>WHAT’S THE BIGGEST RISK TO SELLING THIS?</h3>
+    ${s.opts.map((o,i)=>`<button class="opt ${pick===i?(i===s.a?'ok':'bad'):''}" data-o="${i}">${esc(o)}</button>`).join('')}
+    ${pick!=null?`<div class="fb ${pick===s.a?'ok':'bad'}">${pick===s.a?esc(s.f):'Probably not the big one. Think about who buys this and what they need before they say yes.'}</div>`:''}
+    <div class="mfoot"><button class="ghost" id="mX">Close</button>${pick===s.a?'<button id="mD">File it</button>':''}</div>`);
+    $('#mbox').querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{ pick=+b.dataset.o; pick===s.a?Snd.get():Snd.bad(); draw(); });
+    $('#mX').onclick=closeModal; if($('#mD')) $('#mD').onclick=()=>{ closeModal(); progress('mounttech','files','mt_'+id); }; };
+  draw(); }
+
+function openKepler(){ if(qs('kepler').done) return sayLines('Dashboard',['The leak is flagged. Next stop: the SteerCo deck.']);
+  qs('kepler').started=true;
+  const D=[{s:'Mass Retail',acc:'412k',b:820,w:90},{s:'Mass Affluent',acc:'96k',b:540,w:65},{s:'Small Business',acc:'38k',b:610,w:55},{s:'Premier',acc:'21k',b:430,w:250},{s:'Students',acc:'130k',b:120,w:17}];
+  let tab='b', pick=null, tries=0;
+  const draw=()=>{ const val=d=>tab==='b'?d.b:Math.round(d.w/d.b*100); const mx=Math.max(...D.map(val));
+    openModal(`<h2>The Missing Revenue Mystery ${fictionTag}</h2><p class="sub">Fictional Bank of Avin Town. Customers are up, fee income is flat. Compare the segments and click the one that looks wrong.</p>
+    <div class="tabs"><button class="small ${tab==='b'?'on':''}" data-t="b">Fees billed ($K)</button><button class="small ${tab==='w'?'on':''}" data-t="w">Fees waived (% of billed)</button></div>
+    <div class="chart">${D.map((d,i)=>`<button class="col ${pick===i?(i===3?'ok':'bad'):''}" data-s="${i}" aria-label="${d.s}"><span class="v">${val(d)}${tab==='w'?'%':''}</span><span class="bb" style="height:${Math.max(4,val(d)/mx*150)}px"></span></button>`).join('')}</div>
+    <div class="xl">${D.map(d=>`<span>${d.s}</span>`).join('')}</div>
+    <h3>DATA</h3><div class="scroll"><table class="dt"><tr><th>SEGMENT</th><th>ACCOUNTS</th><th>BILLED $K</th><th>WAIVED $K</th></tr>${D.map(d=>`<tr><td>${d.s}</td><td>${d.acc}</td><td>${d.b}</td><td>${d.w}</td></tr>`).join('')}</table></div>
+    ${pick!=null?`<div class="fb ${pick===3?'ok':'bad'}">${pick===3?'Premier waives 58% of the fees it bills, against 9–14% everywhere else. Some waivers are deliberate perks, but this is where you’d check whether they follow policy. Money the bank should collect but doesn’t: that’s revenue leakage.':'Looks normal next to the others.'+(tab==='b'?' Try the "Fees waived" view.':'')+(tries>=2?' Hint: look at the tallest bar in the waived view.':'')}</div>`:''}
+    <div class="mfoot"><button class="ghost" id="mX">Close</button>${pick===3?'<button id="mD">Add to SteerCo deck</button>':''}</div>`);
+    $('#mbox').querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ tab=b.dataset.t; Snd.blip(); draw(); });
+    $('#mbox').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{ pick=+b.dataset.s; if(pick!==3){ tries++; Snd.bad(); } else Snd.get(); draw(); });
+    $('#mX').onclick=closeModal; if($('#mD')) $('#mD').onclick=()=>{ closeModal(); progress('kepler','leak','kp'); }; };
+  draw(); }
+
+function openHaas(){ if(qs('haas').done) return sayLines('Survey Board',['Hypothesis recorded. Next: test it in the field.']);
+  qs('haas').started=true;
+  const O=['9 in 10 households in Sundarpur received an LPG connection and a stove.','Most of them still cook mainly on firewood, which they collect for free.','A refill costs ₹900 paid all at once, but most families earn small amounts day by day.'];
+  const A=[{t:'People don’t know what LPG is',f:'They already own LPG stoves, so awareness isn’t the issue.'},{t:'Paying for a full refill in one go doesn’t match how families earn',ok:true,f:'Right. Firewood is free and a refill needs a big lump sum. A researcher would test this, for example by offering smaller refills or different ways to pay, then comparing how usage changes across groups.'},{t:'LPG stoves don’t work well in villages',f:'Nothing in the observations points to the stove failing.'},{t:'Food cooked on firewood tastes different',f:'Could be part of it, but observation 3 points to something stronger.'}];
+  let pick=null;
+  const draw=()=>{ openModal(`<h2>The Energy Puzzle ${fictionTag}</h2><p class="sub">Sundarpur is a made-up village. Read the three observations, then pick the most likely barrier.</p>
+    <div class="grid" style="margin-top:8px">${O.map((o,i)=>`<div class="card"><div class="ct">OBSERVATION ${i+1}</div><p style="margin:0">${esc(o)}</p></div>`).join('')}</div>
+    <h3>WHAT’S MOST LIKELY HOLDING THEM BACK?</h3>${A.map((a,i)=>`<button class="opt ${pick===i?(a.ok?'ok':'bad'):''}" data-a="${i}">${esc(a.t)}</button>`).join('')}
+    ${pick!=null?`<div class="fb ${A[pick].ok?'ok':'bad'}">${esc(A[pick].f)}</div>`:''}
+    <div class="mfoot"><button class="ghost" id="mX">Close</button>${pick!=null&&A[pick].ok?'<button id="mD">Write it up</button>':''}</div>`);
+    $('#mbox').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ pick=+b.dataset.a; A[pick].ok?Snd.get():Snd.bad(); draw(); });
+    $('#mX').onclick=closeModal; if($('#mD')) $('#mD').onclick=()=>{ closeModal(); progress('haas','puzzle','hs'); }; };
+  draw(); }
+
+/* ===================== panels: journal, profile, map, menu, final ===================== */
+function allAch(){ return [...ROOM_IDS.map(id=>({id,name:QUESTS[id].ach,icon:QUESTS[id].icon,color:QUESTS[id].color})), ...Object.entries(EXTRA_ACH).map(([id,a])=>({id,...a}))]; }
+function badgesHTML(){ return `<div class="badges">${allAch().map(a=>`<div class="badge ${S.ach.includes(a.id)?'':'locked'}"><canvas data-b="${a.id}" width="16" height="16"></canvas><span>${S.ach.includes(a.id)?esc(a.name):'???'}</span></div>`).join('')}</div>`; }
+function paintBadges(){ const all=allAch(); $('#mbox').querySelectorAll('canvas[data-b]').forEach(c=>{ const a=all.find(x=>x.id===c.dataset.b); c.getContext('2d').drawImage(badgeCanvas(a.icon,a.color),0,0); }); }
+function openJournal(){ if(busy()&&!modalOpen) return;
+  const rows=Object.entries(BUILDINGS).filter(([k,b])=>b.rooms.length).map(([k,b])=>`<h3>${esc(b.name.toUpperCase())}</h3>`+b.rooms.map(id=>{ const q=QUESTS[id], st=S.q[id]||{p:{}}; const status=st.done?'<span class="tag real">DONE</span>':st.started?'<span class="tag fic">IN PROGRESS</span>':'<span class="tag" style="background:#3d3870">NOT STARTED</span>';
+    return `<div class="card" style="margin-bottom:8px"><div class="ct">${esc(q.title)} ${status}</div><div class="sub" style="font-size:18px">${esc(q.name)}</div>${st.started&&!st.done?q.objs.map(o=>{ const n=(st.p&&st.p[o.id])||0; return `<div style="font-size:19px">${n>=o.n?'[x]':'[ ]'} ${esc(o.text)}${o.n>1?` (${n}/${o.n})`:''}</div>`; }).join(''):''}${st.done?`<div style="font-size:19px;color:var(--teal)">Badge: ${esc(q.ach)}</div>`:''}</div>`; }).join('')).join('');
+  openModal(`<h2>Quest Journal</h2><p class="sub">${doneCount()} of ${ROOM_IDS.length} rooms complete. ${futureOpen()?'The Future Lab is open.':`The Future Lab opens at ${UNLOCK_AT}.`}</p>${rows}<div class="mfoot"><button id="mX">Close</button></div>`); $('#mX').onclick=closeModal; }
+function openProfile(){ const shown={}; ROOM_IDS.forEach(id=>{ if(S.q[id]&&S.q[id].done) QUESTS[id].skills.forEach(s=>(shown[s]=shown[s]||[]).push(QUESTS[id].name)); });
+  openModal(`<h2>Avin — Character Profile</h2><p class="sub">Skills unlock as you complete rooms. No made-up stats: each skill lists the rooms where you saw it in action.</p>
+    <div class="grid g2" style="margin-top:10px">${SKILLS.map(s=>`<div class="card ${shown[s]?'ok':''}"><div class="ct">${shown[s]?esc(s.toUpperCase()):'LOCKED SKILL'}</div><div style="font-size:19px" class="${shown[s]?'':'sub'}">${shown[s]?'Seen in: '+shown[s].map(esc).join(', '):'Complete more rooms to reveal it.'}</div></div>`).join('')}</div>
+    <h3>BADGES (${S.ach.length}/${allAch().length})</h3>${badgesHTML()}<div class="mfoot"><button id="mX">Close</button></div>`); paintBadges(); $('#mX').onclick=closeModal; }
+function openMap(){ const town=buildTown(); const c=document.createElement('canvas'); c.width=town.W*T; c.height=town.H*T; const g=c.getContext('2d'); g.drawImage(town.ground,0,0);
+  town.props.forEach(p=>{ if(p.t==='tree'||p.t==='bush'){ R(g,p.x*T+1,p.y*T-3,14,15,'#07060f'); R(g,p.x*T+2,p.y*T-2,12,13,p.t==='tree'?'#3f8a45':'#5fae55'); } }); TOWN_B.forEach(b=>{ g.drawImage(spr('b_'+b.id+(b.id==='future'?futureOpen():'')+bDone(b.id),b.w*T+8,b.h*T+24,gg=>drawBuilding(gg,b)),b.x*T-4,b.y*T-24); });
+  if(scene.id==='town'){ R(g,P.x-4,P.y-8,8,8,'#07060f'); R(g,P.x-3,P.y-7,6,6,'#f4b740'); }
+  const btn=b=>{ const B=BUILDINGS[b.id]; const dn=B.rooms.filter(r=>S.q[r]&&S.q[r].done).length; const lock=b.id==='future'&&!futureOpen();
+    return `<button class="ghost" data-tb="${b.id}" ${lock?'disabled':''}><span>${esc(B.name)}</span><span>${b.id==='future'?(lock?`${doneCount()}/${UNLOCK_AT}`:'OPEN'):`${dn}/${B.rooms.length}`}</span></button>`; };
+  openModal(`<h2>Town Map</h2><p class="sub">Fast-travel to any building’s front door.</p><div id="mapimg"></div><div class="travel">${TOWN_B.map(btn).join('')}</div><div class="mfoot"><button id="mX">Close</button></div>`);
+  c.className='mini'; $('#mapimg').appendChild(c);
+  $('#mbox').querySelectorAll('[data-tb]').forEach(b=>b.onclick=()=>{ const tb=TOWN_B.find(x=>x.id===b.dataset.tb); closeModal(); goTo({scene:'town',x:(tb.door+1)*T,y:(tb.y+tb.h)*T+12,dir:'up'}); });
+  $('#mX').onclick=closeModal; }
+function howToHTML(){ return `<h2>How to Play</h2>
+  <div class="grid g2" style="margin-top:8px"><div class="card"><div class="ct">MOVE</div><p style="margin:0">WASD or arrow keys. On a phone, use the pad in the corner.</p></div>
+  <div class="card"><div class="ct">INTERACT</div><p style="margin:0">E or Space to talk and inspect. Walk into a door to go through it.</p></div>
+  <div class="card"><div class="ct">GOAL</div><p style="margin:0">Each building is a chapter of Avin’s life, and each room is a short quest. Finish any ${UNLOCK_AT} rooms to open the Future Lab.</p></div>
+  <div class="card"><div class="ct">SHORTCUTS</div><p style="margin:0">J journal, P profile, M map and fast travel, Esc menu. Progress saves automatically in this browser.</p></div></div>
+  <p class="sub" style="margin-top:10px"><span class="tag real">FROM THE CV</span> marks Avin’s real experience. <span class="tag fic">FICTIONAL</span> and <span class="tag fun">GAME HUMOUR</span> mark made-up companies, data and jokes.</p>`; }
+function openMenu(){ openModal(`<h2>Menu</h2><div class="grid" style="margin-top:12px;max-width:340px">
+  <button id="m1">Resume</button><button class="ghost" id="m2">How to play</button><button class="ghost" id="m3">Back to title</button><button class="ghost" id="m4">Reset progress</button><div id="m5" class="sub" hidden style="font-size:19px">This clears every quest and badge. <button class="small" id="m6">Yes, reset</button></div></div>`);
+  $('#m1').onclick=closeModal; $('#m2').onclick=()=>{ openModal(howToHTML()+'<div class="mfoot"><button id="mX">Back</button></div>'); $('#mX').onclick=closeModal; };
+  $('#m3').onclick=()=>{ save(); closeModal(); toTitle(); }; $('#m4').onclick=()=>{ $('#m5').hidden=false; };
+  $('#m6').onclick=()=>{ wipe(); closeModal(); toTitle(); }; }
+function showFinal(){ const done=ROOM_IDS.filter(id=>S.q[id]&&S.q[id].done);
+  openModal(`<div class="tag real">THE END (FOR NOW)</div><h2 style="margin-top:8px;font-size:15px">Thanks for playing Avin Quest</h2>
+    <p class="sub">You explored ${done.length} of ${ROOM_IDS.length} rooms and earned ${S.ach.length} of ${allAch().length} badges. The rest of town is still open if you want to keep exploring.</p>
+    <h3>BADGES</h3>${badgesHTML()}
+    <h3>WHAT YOU DISCOVERED</h3><div class="card"><ul class="cv">${done.map(id=>`<li><b>${esc(QUESTS[id].reveal.role)}</b>, ${esc(QUESTS[id].reveal.org)}</li>`).join('')||'<li>Nothing yet. Go explore!</li>'}</ul></div>
+    <h3>WHY WISPR FLOW</h3><div class="card">${PROFILE.whyWispr.map(p=>`<p style="margin:4px 0 8px">${esc(p)}</p>`).join('')}</div>
+    <h3>GET IN TOUCH</h3><div class="card"><div class="copyrow"><span>Email</span><code id="em">${esc(PROFILE.email)}</code><button class="small" id="cp">Copy</button></div>
+    <div class="copyrow" style="margin-top:8px"><span>LinkedIn</span><a href="${esc(PROFILE.linkedin)}" target="_blank" rel="noopener">${esc(PROFILE.linkedin.replace('https://www.',''))}</a></div>
+    ${PROFILE.cvUrl?`<div style="margin-top:10px"><a href="${esc(PROFILE.cvUrl)}" target="_blank" rel="noopener"><button class="small">Open CV (PDF)</button></a></div>`:''}</div>
+    <div class="mfoot"><button class="ghost" id="fR">Back to title</button><button id="fK">Keep exploring</button></div>`);
+  paintBadges(); $('#fK').onclick=closeModal; $('#fR').onclick=()=>{ closeModal(); toTitle(); };
+  $('#cp').onclick=()=>{ const b=$('#cp'); const done=()=>{ b.textContent='Copied'; }; try{ navigator.clipboard.writeText(PROFILE.email).then(done,()=>{ sel(); }); }catch(e){ sel(); }
+    function sel(){ const r=document.createRange(); r.selectNodeContents($('#em')); const s=getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent='Selected'; } }; }
+
+/* ===================== title & flow ===================== */
+function toTitle(){ mode='title'; hidePrompt(); $('#hud').hidden=true; $('#tracker').hidden=true; $('#help').hidden=true; $('#touch').hidden=true; $('#title').hidden=false; $('#tWarn').hidden=true;
+  loadScene('town'); $('#tCont').hidden=!hasSave; $('#tStart').textContent=hasSave?'New Adventure':'Start Adventure'; }
+function startPlay(fresh){ Snd.init(); Snd.startMusic(); if(fresh){ wipe(); }
+  $('#title').hidden=true; mode='play'; $('#hud').hidden=false; $('#help').hidden=isTouch(); $('#touch').hidden=!isTouch();
+  loadScene(S.scene||'town'); P.x=S.x; P.y=S.y; P.dir=S.dir||'up'; if(collides(P.x,P.y)){ loadScene('town'); P.x=18*T; P.y=16*T+12; }
+  snapCam(); updateTracker(); syncSound(); $('#app').focus({preventScroll:true});
+  if(fresh) setTimeout(()=>sayLines('Narrator',['Welcome to Avin Town.','Here lives a Textile Technology student who somehow ended up exploring consulting, startups, venture capital, analytics, research and everything in between.','Your mission? Explore the town, uncover his story, collect achievements, and find out where his next adventure might take him.'],null,null,()=>{ toast('TIP','Talk to Tara, the guide on your left','people','#3fa37a'); }),250);
+  save(); }
+function isTouch(){ return matchMedia('(pointer: coarse)').matches || innerWidth<700; }
+$('#tStart').onclick=()=>{ if(hasSave){ $('#tWarn').hidden=false; return; } startPlay(true); };
+$('#tYes').onclick=()=>startPlay(true);
+$('#tCont').onclick=()=>startPlay(false);
+$('#tHow').onclick=()=>{ openModal(howToHTML()+'<div class="mfoot"><button id="mX">Got it</button></div>'); $('#mX').onclick=closeModal; };
+function syncSound(){ $('#bS').textContent='Sound: '+(S.sound?'on':'off'); }
+$('#bS').onclick=()=>{ Snd.init(); S.sound=!S.sound; syncSound(); save(); };
+document.querySelectorAll('#btns button').forEach(b=>b.addEventListener('click',()=>b.blur()));
+$('#bJ').onclick=()=>{ if(!dlgOpen) openJournal(); }; $('#bP').onclick=()=>{ if(!dlgOpen) openProfile(); }; $('#bM').onclick=()=>{ if(!dlgOpen) openMap(); }; $('#bE').onclick=()=>{ if(!dlgOpen&&!modalOpen) openMenu(); };
+
+/* ===================== input ===================== */
+const KEYMAP={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right'};
+addEventListener('keydown',e=>{ const k=KEYMAP[e.code];
+  const onBtn=document.activeElement&&document.activeElement.tagName==='BUTTON';
+  if(k) e.preventDefault(); else if(e.code==='Space' && !(onBtn && (modalOpen||mode!=='play'))) e.preventDefault();
+  if(e.code==='Escape'){ if(dlgOpen) skipDlg(); else if(modalOpen){ if(modalClose) closeModal(); } else if(mode==='play') openMenu(); return; }
+  if(modalOpen||mode!=='play') return;
+  if(dlgOpen){ if(e.code==='KeyE'||e.code==='Space'||e.code==='Enter'){ e.preventDefault(); if(!e.repeat) advance(); } return; }
+  if(k){ K[k]=1; return; }
+  if((e.code==='KeyE'||e.code==='Space'||e.code==='Enter')&&!e.repeat){ e.preventDefault(); interact(); }
+  if(e.code==='KeyJ') openJournal(); if(e.code==='KeyP') openProfile(); if(e.code==='KeyM') openMap(); });
+addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) K[k]=0; });
+addEventListener('blur',()=>{ K.up=K.down=K.left=K.right=0; });
+document.querySelectorAll('#dpad button').forEach(b=>{ const k=b.dataset.k;
+  b.addEventListener('pointerdown',e=>{ e.preventDefault(); Snd.init(); K[k]=1; b.setPointerCapture(e.pointerId); });
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,()=>{ K[k]=0; })); });
+$('#abtn').addEventListener('pointerdown',e=>{ e.preventDefault(); if(dlgOpen) advance(); else interact(); });
+$('#dlg').addEventListener('click',e=>{ if(e.target.tagName!=='BUTTON') advance(); });
+
+/* ===================== boot ===================== */
+let last=performance.now();
+function frame(t){ const dt=Math.min(.05,(t-last)/1000); last=t; update(dt,t/1000); render(t/1000); requestAnimationFrame(frame); }
+resize(); toTitle(); requestAnimationFrame(frame);
+window.__AQ = { S:()=>S, P, K, scene:()=>scene, goTo, interact, progress, completeQuest, futureOpen };
+</script>
+
+</body>
+</html>
