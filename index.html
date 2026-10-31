@@ -184,6 +184,14 @@ table.dt td:first-child,table.dt th:first-child{text-align:left}
 .copyrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:22px}
 .copyrow code{font-family:var(--body);background:var(--ink2);padding:2px 8px;-webkit-user-select:all;user-select:all}
 a{color:var(--sky)}
+.cvbtn{display:inline-block;font-family:var(--display);font-size:10px;line-height:1.4;color:var(--night);background:var(--gold);padding:11px 14px;text-decoration:none;box-shadow:inset -3px -3px 0 rgba(0,0,0,.25),0 0 0 2px #07060f}
+.cvbtn:hover{filter:brightness(1.08)}
+.cvbtn:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
+#warp{position:absolute;inset:0;z-index:5}
+#warp canvas{position:absolute;inset:0;width:100%;height:100%}
+#warp .wt{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;opacity:0;transition:opacity .2s;padding:0 16px}
+#warp .w1{font-family:var(--display);font-size:clamp(14px,3vw,26px);color:#e8fbff;text-shadow:0 0 12px #4cc7ff,3px 3px 0 #2a1d6b;letter-spacing:.08em}
+#warp .w2{font-size:24px;color:#bfe9ff;margin-top:12px}
 @media (prefers-reduced-motion:reduce){.toast,.toast.out,.blink{animation:none}#fade{transition:none}}
 </style>
 
@@ -216,7 +224,7 @@ a{color:var(--sky)}
   </div>
   <div id="title">
     <h1>AVIN QUEST</h1>
-    <div class="st">One Guy. Many Adventures. Too Many Side Quests.</div>
+    <div class="st">An Interactive Resume. Sort Of.</div>
     <div class="tb">
       <button id="tStart">Start Adventure</button>
       <button id="tCont" class="ghost" hidden>Continue Adventure</button>
@@ -239,7 +247,7 @@ const PROFILE = {
   name: 'Avin Gaur',
   email: 'avingaur.iitd@gmail.com',
   linkedin: 'https://www.linkedin.com/in/avin-gaur/',
-  cvUrl: '', // paste a public link to your CV PDF here to show a "Download CV" button
+  cvUrl: 'cv.pdf', // the CV file sits next to index.html; change this if you host it elsewhere
   whyWispr: [
     "I dictated the brief for this game with Wispr Flow. Talking was faster than typing, and the words came out sounding like me. That's the whole pitch, and I bought it.",
     "Growth is where the things in this town meet: understanding users like a product person, reading the numbers like an analyst, and testing ideas fast like a founder.",
@@ -398,7 +406,7 @@ function save(){ try{ S.scene=scene?scene.id:S.scene; S.x=P.x; S.y=P.y; S.dir=P.
 function wipe(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} const snd=S.sound; S=newState(); S.sound=snd; hasSave=false; }
 const qs = id => S.q[id] || (S.q[id] = { p:{}, done:false, started:false });
 const doneCount = () => ROOM_IDS.filter(id => S.q[id] && S.q[id].done).length;
-const futureOpen = () => doneCount() >= UNLOCK_AT;
+const futureOpen = () => doneCount() >= UNLOCK_AT || !!(S.flags && S.flags.bypass);
 function objDone(id,o){ const ob=QUESTS[id].objs.find(x=>x.id===o); return (qs(id).p[o]||0) >= ob.n; }
 function progress(id,o,flag){ if(flag){ if(S.flags[flag]) return false; S.flags[flag]=1; }
   const st=qs(id); st.started=true; const ob=QUESTS[id].objs.find(x=>x.id===o);
@@ -418,6 +426,8 @@ const Snd = {
   door(){ this.tone(220,.08,'triangle',.08); this.tone(330,.1,'triangle',.06,.06); },
   get(){ [660,880,1320].forEach((f,i)=>this.tone(f,.09,'square',.04,i*.06)); },
   bad(){ this.tone(180,.15,'sawtooth',.04); },
+  warp(){ if(!this.ac||!S.sound) return; const t=this.ac.currentTime, o=this.ac.createOscillator(), g=this.ac.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(70,t); o.frequency.exponentialRampToValueAtTime(1400,t+2.2);
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.05,t+.6); g.gain.exponentialRampToValueAtTime(.0001,t+2.6); o.connect(g); g.connect(this.mg); o.start(t); o.stop(t+2.7); [523,784,1047,1568].forEach((f,i)=>this.tone(f,.3,'triangle',.04,2.2+i*.08)); },
   ach(){ [523,659,784,1047,784,1047].forEach((f,i)=>this.tone(f,.12,'square',.045,i*.09)); },
   startMusic(){ if(this.music||!this.ac) return; const notes=[262,330,392,494,440,392,330,294, 262,330,392,523,494,392,349,330];
     const bass=[131,131,165,165,110,110,147,147];
@@ -732,13 +742,14 @@ function buildTown(){
   [[12,12],[23,12],[12,17],[23,17]].forEach(([x,y])=>add({t:'lamp',x,y}));
   add({t:'board',x:13,y:12,w:2,label:'Read notice board',act:noticeBoard});
   add({t:'sign',x:21,y:12,text:'AVIN TOWN',label:'Read sign',act:()=>sayLines('Town Sign',['North: Future Lab (locked until 4 rooms are done). Northwest: IIT Delhi. Northeast: Startup Garage.','South side: Venture Capital, Research Lab and the Consulting Office. Press M any time to fast-travel.'])});
-  npcs.push({id:'guide',x:15,y:16,dir:'right',look:LOOKS.guide,name:'Tara, Town Guide',talk:talkGuide});
+  npcs.push({id:'guide',x:15,y:16,dir:'right',look:LOOKS.guide,name:'Bhavya, Town Guide',talk:talkGuide});
   npcs.push({id:'recruiter',x:22,y:15,dir:'left',look:LOOKS.recruiter,name:'Visiting Recruiter',talk:()=>sayLines('Visiting Recruiter',[
     'So a Textile Technology student ends up in consulting, venture capital, startups AND research?',
     'My theory: textiles is about turning raw material into something useful through a lot of process. Seems he applied that to everything else too.',
     "Anyway, I'm here for the Future Lab. I hear it opens once you've seen four rooms."],LOOKS.recruiter,'fun')});
   npcs.push({id:'locke',x:20,y:7,dir:'down',look:LOOKS.robot,name:'LOCK-E',talk:()=>{ const n=doneCount();
-    sayLines('LOCK-E', futureOpen()? ['Access granted. Avin is waiting inside the Future Lab.'] : [`Beep. The Future Lab is locked.`,`Complete any ${UNLOCK_AT} rooms to open it. Progress: ${n}/${UNLOCK_AT}.`],LOOKS.robot); }});
+    if(futureOpen()) return sayLines('LOCK-E',['Access granted. Avin is waiting inside the Future Lab.'],LOOKS.robot);
+    sayLines('LOCK-E',[`Beep. The Future Lab is locked.`,`Complete any ${UNLOCK_AT} rooms to open it. Progress: ${n}/${UNLOCK_AT}.`,'Short on time? I can show you what you would skip, and then let you in early.'],LOOKS.robot,null,openBypass); }});
   npcs.forEach(n=>{ for(let y=n.y-1;y<=n.y+1;y++) for(let x=n.x-1;x<=n.x+1;x++) occ[y*W+x]=1; });
   // trees
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const i=y*W+x; if(tile[i]!=='g'||occ[i]) continue;
@@ -1018,7 +1029,7 @@ function resize(){ const w=innerWidth, h=innerHeight; SC=Math.max(2,Math.floor(M
 addEventListener('resize',resize);
 
 function loadScene(id){ scene = id==='town'? buildTown() : buildInterior(id); $('#locn').textContent=scene.name; updateTracker(); }
-function goTo(go){ if(fading) return; fading=true; Snd.door(); hidePrompt(); $('#fade').style.opacity=1;
+function goTo(go){ if(fading) return; if(go.scene==='future'){ warpInto(go); return; } fading=true; Snd.door(); hidePrompt(); $('#fade').style.opacity=1;
   setTimeout(()=>{ loadScene(go.scene); P.x=go.x; P.y=go.y; P.dir=go.dir||'down'; doorCool=.35; snapCam(); save();
     onEnter(); $('#fade').style.opacity=0; setTimeout(()=>{ fading=false; },180); },190); }
 function onEnter(){ if(scene.kind==='room'){ const st=qs(scene.id); if(!st.started && !st.done){ st.started=true; save(); questBanner(scene.id); } updateTracker(); }
@@ -1058,9 +1069,9 @@ function findTarget(){ target=null; nearZone=null; let best=15; const cx=P.x, cy
     const d=rectDist(cx,cy,rx,ry,rw,rh)-(p.t==='item'?2:0); if(d<best){ best=d; target={kind:'prop',p,x:rx+rw/2,y:ry-(p.t==='bookshelf'||p.t==='cabinet'||p.t==='vending'?16:p.t==='rocket'?40:p.t==='item'?4:6),label:p.label||'Inspect'}; } }
   for(const n of scene.npcs){ const d=rectDist(cx,cy,n.x*T,n.y*T,T,T); if(d<best+1){ best=d; target={kind:'npc',n,x:n.x*T+8,y:n.y*T-6,label:'Talk to '+n.name.split(',')[0]}; } }
   if(!target){ for(const z of scene.zones){ const d=rectDist(cx,cy,z.x,z.y,z.w,z.h); if(d<20){ nearZone=z; break; } } }
-  if(!target && scene.id==='town' && !futureOpen()){ const b=TOWN_B[1]; const zx=b.door*T, zy=(b.y+b.h-1)*T; if(rectDist(cx,cy,zx,zy,2*T,T)<18) nearZone={x:zx,y:zy,w:2*T,h:T,label:`Locked: finish ${UNLOCK_AT} rooms (${doneCount()}/${UNLOCK_AT})`,locked:true}; }
+  if(!target && scene.id==='town' && !futureOpen()){ const b=TOWN_B[1]; const zx=b.door*T, zy=(b.y+b.h-1)*T; if(rectDist(cx,cy,zx,zy,2*T,T)<18) nearZone={x:zx,y:zy,w:2*T,h:T,label:`Locked (${doneCount()}/${UNLOCK_AT} rooms). Skip ahead?`,locked:true}; }
 }
-function interact(){ Snd.init(); if(busy()) return; if(!target) return; Snd.blip();
+function interact(){ Snd.init(); if(busy()) return; if(!target){ if(nearZone&&nearZone.locked) openBypass(); return; } Snd.blip();
   if(target.kind==='npc'){ const n=target.n; const dx=P.x-(n.x*T+8), dy=(P.y-8)-(n.y*T+8); n.dir = Math.abs(dx)>Math.abs(dy) ? (dx<0?'left':'right') : (dy<0?'up':'down'); n.talk(); }
   else target.p.act(); }
 
@@ -1106,7 +1117,7 @@ function npcHasNews(n){ if(!scene) return false;
 const promptEl=$('#prompt');
 function hidePrompt(){ promptEl.hidden=true; }
 function positionPrompt(){ if(mode!=='play'||busy()){ promptEl.hidden=true; return; }
-  let tx,ty,label,key='E'; if(target){ tx=target.x; ty=target.y; label=target.label; } else if(nearZone){ tx=nearZone.x+nearZone.w/2; ty=nearZone.py!=null?nearZone.py:nearZone.y-(scene.id==='town'?30:2); label=nearZone.label; key=nearZone.locked?'':'WALK IN'; if(scene.kind!=='town'&&nearZone.y>T*2&&nearZone.py==null) ty=nearZone.y-4; } else { promptEl.hidden=true; return; }
+  let tx,ty,label,key='E'; if(target){ tx=target.x; ty=target.y; label=target.label; } else if(nearZone){ tx=nearZone.x+nearZone.w/2; ty=nearZone.py!=null?nearZone.py:nearZone.y-(scene.id==='town'?30:2); label=nearZone.label; key=nearZone.locked?'E':'WALK IN'; if(scene.kind!=='town'&&nearZone.y>T*2&&nearZone.py==null) ty=nearZone.y-4; } else { promptEl.hidden=true; return; }
   promptEl.innerHTML=(key?`<span class="key">${key}</span>`:'')+esc(label); promptEl.hidden=false;
   const r=cv.getBoundingClientRect(); let sx=(tx-cam.x)*SC+r.left, sy=(ty-cam.y)*SC+r.top;
   sx=clamp(sx,90,innerWidth-90); sy=clamp(sy,40,innerHeight-10); promptEl.style.left=sx+'px'; promptEl.style.top=sy+'px'; }
@@ -1116,9 +1127,9 @@ function updateTracker(){ const el=$('#tracker'); if(mode!=='play'||!scene){ el.
     h=`<div class="h">QUEST</div><div class="q">${esc(q.title)}</div>`+q.objs.map(o=>{ const n=st.p[o.id]||0, d=n>=o.n; return `<div class="o${d?' d':''}"><span>${d?'[x]':'[ ]'}</span><span>${esc(o.text)}${o.n>1?` (${n}/${o.n})`:''}</span></div>`; }).join('')+(st.done?'<div class="o d">Done! Exit at the bottom door.</div>':'');
   } else { const n=doneCount();
     h=`<div class="h">PROGRESS</div>`;
-    if(!S.guide) h+=`<div class="q">Talk to Tara, the town guide</div>`;
+    if(!S.guide) h+=`<div class="q">Talk to Bhavya, the town guide</div>`;
     h+=`<div class="o${n>=UNLOCK_AT?' d':''}"><span>${n>=UNLOCK_AT?'[x]':'[ ]'}</span><span>Rooms explored: ${n}/${ROOM_IDS.length}</span></div>`;
-    h+= futureOpen()? (S.ach.includes('future')?`<div class="o d"><span>[x]</span><span>Future Lab visited</span></div>`:`<div class="q">The Future Lab is open! Head north.</div>`) : `<div class="o"><span>[ ]</span><span>Future Lab opens at ${UNLOCK_AT} rooms</span></div>`;
+    h+= futureOpen()? (S.ach.includes('future')?`<div class="o d"><span>[x]</span><span>Future Lab visited</span></div>`:`<div class="q">The Future Lab is open! Head north.</div>`) : `<div class="o"><span>[ ]</span><span>Future Lab opens at ${UNLOCK_AT} rooms</span></div><div class="o" style="color:var(--muted)"><span>&gt;</span><span>Short on time? Esc, then Skip ahead</span></div>`;
     if(scene.kind==='lobby'){ const B=BUILDINGS[LOBBIES[scene.id].b]; const dn=B.rooms.filter(r=>S.q[r]&&S.q[r].done).length; h+=`<div class="o"><span>&gt;</span><span>This building: ${dn}/${B.rooms.length} rooms</span></div>`; }
   }
   el.innerHTML=h; const hb=$('#hud').getBoundingClientRect(); el.style.top=(hb.bottom+8)+'px'; $('#toasts').style.top=(hb.bottom+8)+'px'; }
@@ -1172,7 +1183,7 @@ function showReveal(id,cb){ const q=QUESTS[id], r=q.reveal;
 
 /* ===================== quest logic ===================== */
 function talkGuide(){ const first=!S.guide; S.guide=true; save(); updateTracker();
-  sayLines('Tara, Town Guide', first? ['Welcome to Avin Town! I’m Tara. I’ll keep this quick.','Walk with WASD or the arrow keys. Press E or Space to talk to people and inspect things.','Each building is a chapter of Avin’s life. Walk into a door to go inside.',`Finish any ${UNLOCK_AT} rooms and the Future Lab up north will open. That’s where the story ends.`,'Press J for your journal and M for the map. Have fun!']
+  sayLines('Bhavya, Town Guide', first? ['Welcome to Avin Town! I’m Bhavya. I’ll keep this quick.','Walk with WASD or the arrow keys. Press E or Space to talk to people and inspect things.','Each building is a chapter of Avin’s life. Walk into a door to go inside.',`Finish any ${UNLOCK_AT} rooms and the Future Lab up north will open. That’s where the story ends.`,'Short on time? Talk to LOCK-E, the robot by the Future Lab, and it can let you skip ahead.','Press J for your journal and M for the map. Have fun!']
     : [ futureOpen()? 'The Future Lab is open. It’s the purple building up north.' : `You’ve explored ${doneCount()} of ${UNLOCK_AT} rooms needed for the Future Lab. IIT Delhi to the northwest has the most rooms.`,'Press M to fast-travel if you get tired of walking.'], LOOKS.guide); }
 function acItem(flag,title,text){ if(progress('academics','items',flag)) sayLines(title,[text],null,'real'); }
 function bncDoc(flag,title,text){ if(progress('bnc','docs',flag)) sayLines(title,[text],null,'fic'); }
@@ -1315,6 +1326,42 @@ function openHaas(){ if(qs('haas').done) return sayLines('Survey Board',['Hypoth
     $('#mX').onclick=closeModal; if($('#mD')) $('#mD').onclick=()=>{ closeModal(); progress('haas','puzzle','hs'); }; };
   draw(); }
 
+/* ===================== future: warp and bypass ===================== */
+const FUTURE_SPAWN = { scene:'future', x:8*T, y:9*T+12, dir:'up' };
+function warpInto(go){ fading=true; hidePrompt(); Snd.init(); Snd.warp();
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wrap=document.createElement('div'); wrap.id='warp'; wrap.innerHTML='<canvas></canvas><div class="wt"><div class="w1">ENTERING THE FUTURE LAB</div><div class="w2">Initialising next chapter...</div></div>'; $('#app').appendChild(wrap);
+  const c=wrap.querySelector('canvas'), g=c.getContext('2d'); const w=c.width=innerWidth, h=c.height=innerHeight, cx=w/2, cy=h/2, F=Math.max(w,h)*0.6;
+  const N=reduce?80:520; const st=[...Array(N)].map(()=>({x:(Math.random()*2-1)*w, y:(Math.random()*2-1)*h, z:Math.random()*w+1, hue:Math.random()<.5?185:280}));
+  const D=reduce?900:2900, t0=performance.now(); let swapped=false; const txt=wrap.querySelector('.wt');
+  function f(now){ const k=Math.min(1,(now-t0)/D);
+    const sp = k<0.18 ? k/0.18*3 : 3+Math.pow((k-0.18)/0.62,2.4)*70;
+    g.fillStyle=`rgba(6,3,20,${k<0.18?0.18+k*3:0.32})`; g.fillRect(0,0,w,h);
+    // tunnel rings
+    if(!reduce) for(let i=0;i<6;i++){ const r=((now/6+i*90)%540)/540; const rr=Math.pow(r,2.2)*Math.max(w,h); g.strokeStyle=`hsla(${190+i*18},100%,65%,${(1-r)*0.25*Math.min(1,k*3)})`; g.lineWidth=2+r*6; g.beginPath(); g.arc(cx,cy,rr,0,Math.PI*2); g.stroke(); }
+    for(const s of st){ const ox=cx+s.x/s.z*F*0.5, oy=cy+s.y/s.z*F*0.5; s.z-=sp*(w/700);
+      if(s.z<1){ s.x=(Math.random()*2-1)*w; s.y=(Math.random()*2-1)*h; s.z=w; continue; }
+      const nx=cx+s.x/s.z*F*0.5, ny=cy+s.y/s.z*F*0.5, a=Math.min(1,(1-s.z/w)*1.6);
+      g.strokeStyle=`hsla(${s.hue+k*40},100%,${70+k*20}%,${a})`; g.lineWidth=Math.max(1,(1-s.z/w)*3.2); g.beginPath(); g.moveTo(ox,oy); g.lineTo(nx,ny); g.stroke(); }
+    const glow=g.createRadialGradient(cx,cy,0,cx,cy,Math.max(w,h)*0.35); glow.addColorStop(0,`rgba(180,240,255,${0.15+k*0.35})`); glow.addColorStop(1,'rgba(180,240,255,0)'); g.fillStyle=glow; g.fillRect(0,0,w,h);
+    txt.style.opacity = k<0.15?0:k<0.75?1:Math.max(0,1-(k-0.75)/0.1);
+    if(k>0.82){ g.fillStyle=`rgba(255,255,255,${Math.min(1,(k-0.82)/0.12)})`; g.fillRect(0,0,w,h); }
+    if(k>=0.95 && !swapped){ swapped=true; loadScene(go.scene); P.x=go.x; P.y=go.y; P.dir=go.dir||'up'; doorCool=.4; snapCam(); save(); onEnter(); }
+    if(k<1) requestAnimationFrame(f);
+    else { wrap.style.transition='opacity .7s'; requestAnimationFrame(()=>{ wrap.style.opacity=0; }); setTimeout(()=>{ wrap.remove(); fading=false; if(!S.flags.warpToast){ S.flags.warpToast=1; save(); toast('YOU ARRIVED','The Future Lab','rocket','#7b6cf0'); } },720); } }
+  requestAnimationFrame(f); }
+function openBypass(){ if(futureOpen()){ warpInto(FUTURE_SPAWN); return; }
+  const missed=ROOM_IDS.filter(id=>!(S.q[id]&&S.q[id].done)), n=doneCount();
+  const cards=missed.map(id=>{ const q=QUESTS[id], r=q.reveal; return `<div class="card"><div style="display:flex;gap:10px;align-items:center;margin-bottom:6px"><span class="badge locked" style="flex:none"><canvas data-b="${id}" width="16" height="16" style="width:40px;height:40px"></canvas></span><div style="min-width:0"><div class="ct" style="margin:0">${esc(q.ach)}</div><div class="sub" style="font-size:17px">Badge not earned · ${esc(BUILDINGS[q.b].name)}</div></div></div>
+    <div class="role" style="font-size:20px">${esc(r.role)}</div><div class="sub" style="font-size:18px">${esc(r.org)}${r.dates?` · ${esc(r.dates)}`:''}</div><ul class="cv" style="font-size:19px">${r.lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`; }).join('');
+  openModal(`<h2>Short on time?</h2><p>The Future Lab normally opens after ${UNLOCK_AT} rooms. You’ve finished ${n}. Here’s everything you would skip, straight from Avin’s CV <span class="tag real">FROM THE CV</span></p>
+    <h3>BADGES YOU’D MISS (${missed.length})</h3><div class="grid g2">${cards}</div>
+    <div class="card" style="margin-top:14px;box-shadow:0 0 0 3px var(--gold),0 -12px 18px rgba(16,15,29,.9);position:sticky;bottom:-16px;background:var(--ink2)"><div class="ct">DO YOU WANT TO BYPASS?</div><p style="margin:0">You’ll go straight to the Future Lab. The badges stay locked, but you can come back and play any room later.</p>
+    <div class="mfoot" style="margin-top:10px"><button class="ghost" id="bpN">Keep exploring</button><button id="bpY">Bypass and enter the Future Lab</button></div></div>`);
+  $('#mbox').querySelectorAll('canvas[data-b]').forEach(cv2=>{ const q=QUESTS[cv2.dataset.b]; cv2.getContext('2d').drawImage(badgeCanvas(q.icon,q.color),0,0); });
+  $('#bpN').onclick=closeModal;
+  $('#bpY').onclick=()=>{ S.flags.bypass=1; save(); updateTracker(); closeModal(); setTimeout(()=>warpInto(FUTURE_SPAWN),120); }; }
+
 /* ===================== panels: journal, profile, map, menu, final ===================== */
 function allAch(){ return [...ROOM_IDS.map(id=>({id,name:QUESTS[id].ach,icon:QUESTS[id].icon,color:QUESTS[id].color})), ...Object.entries(EXTRA_ACH).map(([id,a])=>({id,...a}))]; }
 function badgesHTML(){ return `<div class="badges">${allAch().map(a=>`<div class="badge ${S.ach.includes(a.id)?'':'locked'}"><canvas data-b="${a.id}" width="16" height="16"></canvas><span>${S.ach.includes(a.id)?esc(a.name):'???'}</span></div>`).join('')}</div>`; }
@@ -1331,20 +1378,20 @@ function openMap(){ const town=buildTown(); const c=document.createElement('canv
   town.props.forEach(p=>{ if(p.t==='tree'||p.t==='bush'){ R(g,p.x*T+1,p.y*T-3,14,15,'#07060f'); R(g,p.x*T+2,p.y*T-2,12,13,p.t==='tree'?'#3f8a45':'#5fae55'); } }); TOWN_B.forEach(b=>{ g.drawImage(spr('b_'+b.id+(b.id==='future'?futureOpen():'')+bDone(b.id),b.w*T+8,b.h*T+24,gg=>drawBuilding(gg,b)),b.x*T-4,b.y*T-24); });
   if(scene.id==='town'){ R(g,P.x-4,P.y-8,8,8,'#07060f'); R(g,P.x-3,P.y-7,6,6,'#f4b740'); }
   const btn=b=>{ const B=BUILDINGS[b.id]; const dn=B.rooms.filter(r=>S.q[r]&&S.q[r].done).length; const lock=b.id==='future'&&!futureOpen();
-    return `<button class="ghost" data-tb="${b.id}" ${lock?'disabled':''}><span>${esc(B.name)}</span><span>${b.id==='future'?(lock?`${doneCount()}/${UNLOCK_AT}`:'OPEN'):`${dn}/${B.rooms.length}`}</span></button>`; };
+    return `<button class="ghost" data-tb="${b.id}"><span>${esc(B.name)}</span><span>${b.id==='future'?(lock?`SKIP AHEAD`:'OPEN'):`${dn}/${B.rooms.length}`}</span></button>`; };
   openModal(`<h2>Town Map</h2><p class="sub">Fast-travel to any building’s front door.</p><div id="mapimg"></div><div class="travel">${TOWN_B.map(btn).join('')}</div><div class="mfoot"><button id="mX">Close</button></div>`);
   c.className='mini'; $('#mapimg').appendChild(c);
-  $('#mbox').querySelectorAll('[data-tb]').forEach(b=>b.onclick=()=>{ const tb=TOWN_B.find(x=>x.id===b.dataset.tb); closeModal(); goTo({scene:'town',x:(tb.door+1)*T,y:(tb.y+tb.h)*T+12,dir:'up'}); });
+  $('#mbox').querySelectorAll('[data-tb]').forEach(b=>b.onclick=()=>{ if(b.dataset.tb==='future'&&!futureOpen()){ openBypass(); return; } const tb=TOWN_B.find(x=>x.id===b.dataset.tb); closeModal(); goTo({scene:'town',x:(tb.door+1)*T,y:(tb.y+tb.h)*T+12,dir:'up'}); });
   $('#mX').onclick=closeModal; }
 function howToHTML(){ return `<h2>How to Play</h2>
   <div class="grid g2" style="margin-top:8px"><div class="card"><div class="ct">MOVE</div><p style="margin:0">WASD or arrow keys. On a phone, use the pad in the corner.</p></div>
   <div class="card"><div class="ct">INTERACT</div><p style="margin:0">E or Space to talk and inspect. Walk into a door to go through it.</p></div>
-  <div class="card"><div class="ct">GOAL</div><p style="margin:0">Each building is a chapter of Avin’s life, and each room is a short quest. Finish any ${UNLOCK_AT} rooms to open the Future Lab.</p></div>
+  <div class="card"><div class="ct">GOAL</div><p style="margin:0">Each building is a chapter of Avin’s life, and each room is a short quest. Finish any ${UNLOCK_AT} rooms to open the Future Lab. Short on time? Press Esc and choose Skip ahead.</p></div>
   <div class="card"><div class="ct">SHORTCUTS</div><p style="margin:0">J journal, P profile, M map and fast travel, Esc menu. Progress saves automatically in this browser.</p></div></div>
   <p class="sub" style="margin-top:10px"><span class="tag real">FROM THE CV</span> marks Avin’s real experience. <span class="tag fic">FICTIONAL</span> and <span class="tag fun">GAME HUMOUR</span> mark made-up companies, data and jokes.</p>`; }
 function openMenu(){ openModal(`<h2>Menu</h2><div class="grid" style="margin-top:12px;max-width:340px">
-  <button id="m1">Resume</button><button class="ghost" id="m2">How to play</button><button class="ghost" id="m3">Back to title</button><button class="ghost" id="m4">Reset progress</button><div id="m5" class="sub" hidden style="font-size:19px">This clears every quest and badge. <button class="small" id="m6">Yes, reset</button></div></div>`);
-  $('#m1').onclick=closeModal; $('#m2').onclick=()=>{ openModal(howToHTML()+'<div class="mfoot"><button id="mX">Back</button></div>'); $('#mX').onclick=closeModal; };
+  <button id="m1">Resume</button><button class="ghost" id="m7">${futureOpen()?'Go to the Future Lab':'Short on time? Skip ahead'}</button><button class="ghost" id="m2">How to play</button><button class="ghost" id="m3">Back to title</button><button class="ghost" id="m4">Reset progress</button><div id="m5" class="sub" hidden style="font-size:19px">This clears every quest and badge. <button class="small" id="m6">Yes, reset</button></div></div>`);
+  $('#m1').onclick=closeModal; $('#m7').onclick=()=>{ if(futureOpen()){ closeModal(); warpInto(FUTURE_SPAWN); } else openBypass(); }; $('#m2').onclick=()=>{ openModal(howToHTML()+'<div class="mfoot"><button id="mX">Back</button></div>'); $('#mX').onclick=closeModal; };
   $('#m3').onclick=()=>{ save(); closeModal(); toTitle(); }; $('#m4').onclick=()=>{ $('#m5').hidden=false; };
   $('#m6').onclick=()=>{ wipe(); closeModal(); toTitle(); }; }
 function showFinal(){ const done=ROOM_IDS.filter(id=>S.q[id]&&S.q[id].done);
@@ -1352,10 +1399,11 @@ function showFinal(){ const done=ROOM_IDS.filter(id=>S.q[id]&&S.q[id].done);
     <p class="sub">You explored ${done.length} of ${ROOM_IDS.length} rooms and earned ${S.ach.length} of ${allAch().length} badges. The rest of town is still open if you want to keep exploring.</p>
     <h3>BADGES</h3>${badgesHTML()}
     <h3>WHAT YOU DISCOVERED</h3><div class="card"><ul class="cv">${done.map(id=>`<li><b>${esc(QUESTS[id].reveal.role)}</b>, ${esc(QUESTS[id].reveal.org)}</li>`).join('')||'<li>Nothing yet. Go explore!</li>'}</ul></div>
+    ${ROOM_IDS.length>done.length?`<h3>ALSO ON AVIN’S CV</h3><div class="card"><ul class="cv">${ROOM_IDS.filter(id=>!done.includes(id)).map(id=>`<li><b>${esc(QUESTS[id].reveal.role)}</b>, ${esc(QUESTS[id].reveal.org)}</li>`).join('')}</ul></div>`:''}
     <h3>WHY WISPR FLOW</h3><div class="card">${PROFILE.whyWispr.map(p=>`<p style="margin:4px 0 8px">${esc(p)}</p>`).join('')}</div>
     <h3>GET IN TOUCH</h3><div class="card"><div class="copyrow"><span>Email</span><code id="em">${esc(PROFILE.email)}</code><button class="small" id="cp">Copy</button></div>
     <div class="copyrow" style="margin-top:8px"><span>LinkedIn</span><a href="${esc(PROFILE.linkedin)}" target="_blank" rel="noopener">${esc(PROFILE.linkedin.replace('https://www.',''))}</a></div>
-    ${PROFILE.cvUrl?`<div style="margin-top:10px"><a href="${esc(PROFILE.cvUrl)}" target="_blank" rel="noopener"><button class="small">Open CV (PDF)</button></a></div>`:''}</div>
+    ${PROFILE.cvUrl?`<div style="margin-top:12px"><a class="cvbtn" href="${esc(PROFILE.cvUrl)}" download="Avin_Gaur_CV.pdf" target="_blank" rel="noopener">Download CV (PDF)</a></div>`:''}</div>
     <div class="mfoot"><button class="ghost" id="fR">Back to title</button><button id="fK">Keep exploring</button></div>`);
   paintBadges(); $('#fK').onclick=closeModal; $('#fR').onclick=()=>{ closeModal(); toTitle(); };
   $('#cp').onclick=()=>{ const b=$('#cp'); const done=()=>{ b.textContent='Copied'; }; try{ navigator.clipboard.writeText(PROFILE.email).then(done,()=>{ sel(); }); }catch(e){ sel(); }
@@ -1368,7 +1416,7 @@ function startPlay(fresh){ Snd.init(); Snd.startMusic(); if(fresh){ wipe(); }
   $('#title').hidden=true; mode='play'; $('#hud').hidden=false; $('#help').hidden=isTouch(); $('#touch').hidden=!isTouch();
   loadScene(S.scene||'town'); P.x=S.x; P.y=S.y; P.dir=S.dir||'up'; if(collides(P.x,P.y)){ loadScene('town'); P.x=18*T; P.y=16*T+12; }
   snapCam(); updateTracker(); syncSound(); $('#app').focus({preventScroll:true});
-  if(fresh) setTimeout(()=>sayLines('Narrator',['Welcome to Avin Town.','Here lives a Textile Technology student who somehow ended up exploring consulting, startups, venture capital, analytics, research and everything in between.','Your mission? Explore the town, uncover his story, collect achievements, and find out where his next adventure might take him.'],null,null,()=>{ toast('TIP','Talk to Tara, the guide on your left','people','#3fa37a'); }),250);
+  if(fresh) setTimeout(()=>sayLines('Narrator',['Welcome to Avin Town.','Here lives a Textile Technology student who somehow ended up exploring consulting, startups, venture capital, analytics, research and everything in between.','Your mission? Explore the town, uncover his story, collect achievements, and find out where his next adventure might take him.'],null,null,()=>{ toast('TIP','Talk to Bhavya, the guide on your left','people','#3fa37a'); }),250);
   save(); }
 function isTouch(){ return matchMedia('(pointer: coarse)').matches || innerWidth<700; }
 $('#tStart').onclick=()=>{ if(hasSave){ $('#tWarn').hidden=false; return; } startPlay(true); };
